@@ -1,8 +1,28 @@
-# CityBus Telegram Bot Requirements
-python-telegram-bot>=20.0
+# CityBus Bot — Production Requirements
+
+# ─── Core ───
+python-telegram-bot[job-queue]>=20.0
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+
+# ─── Data ───
 gtfs-realtime-bindings
 rapidfuzz
-apscheduler
+
+# ─── Database ───
+motor                           # MongoDB async driver
+pymongo                         # MongoDB sync (for scripts)
+redis[hiredis]                  # Redis async with C parser
+
+# ─── HTTP ───
 requests
 
-python-dotenv
+# ─── MCP ───
+mcp[cli]
+
+
+# ─── Testing ───
+pytest
+httpx

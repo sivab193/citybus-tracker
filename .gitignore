@@ -10,9 +10,6 @@ venv/
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Test files
-test_*.py
-*_test.py
 
 # Downloaded GTFS-RT files (will be fetched at runtime)
 *.pb
@@ -43,3 +40,10 @@ Thumbs.db
 
 # Artifacts (development only)
 .gemini/
+
+# API database
+api_users.db
+
+# Testing and Linting
+.pytest_cache/
+.ruff_cache/
