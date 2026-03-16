@@ -45,7 +45,7 @@ class TestHealth:
         mock_svc.return_value = svc
         resp = client.get("/")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "healthy"
+        assert "text/html" in resp.headers["content-type"]
 
     @patch("citybus.api.routes.get_stop_service")
     def test_health_endpoint(self, mock_svc, client):

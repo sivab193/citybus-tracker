@@ -1,4 +1,4 @@
-.PHONY: test help load-gtfs run-api run-bot run-worker run-all
+.PHONY: test help load-gtfs run-api run-bot run-worker run-all setup stop-all test-docker
 
 # Colors and formatting
 CYAN = \033[36m
@@ -6,59 +6,53 @@ GREEN = \033[32m
 RESET = \033[0m
 
 help:
-	@echo "$(CYAN)CityBus Bot Makefile$(RESET)"
+	@echo "$(CYAN)CityBus Bot Makefile (Dockerized)$(RESET)"
 	@echo "Available commands:"
-	@echo "  $(GREEN)make setup$(RESET)        - Install dependencies and setup environment"
-	@echo "  $(GREEN)make test$(RESET)         - Run the test suite with pytest"
-	@echo "  $(GREEN)make load-gtfs$(RESET)    - Load a GTFS .zip file into MongoDB (e.g., make load-gtfs ZIP=gtfs.zip CITY=citybus)"
-	@echo "  $(GREEN)make run-api$(RESET)      - Run the FastAPI REST server"
-	@echo "  $(GREEN)make run-bot$(RESET)      - Run the Telegram bot"
-	@echo "  $(GREEN)make run-worker$(RESET)   - Run the background polling worker"
-	@echo "  $(GREEN)make mcp$(RESET)          - Run the MCP server in stdout mode for LM Studio"
+	@echo "  $(GREEN)make run-all$(RESET)       - Start all services with Docker Compose"
+	@echo "  $(GREEN)make stop-all$(RESET)      - Stop all services and containers"
+	@echo "  $(GREEN)make run-api$(RESET)       - Start only the API service"
+	@echo "  $(GREEN)make run-bot$(RESET)       - Start only the Bot service"
+	@echo "  $(GREEN)make load-gtfs$(RESET)     - Load GTFS into Docker Mongo (e.g., make load-gtfs ZIP=gtfs.zip CITY=citybus)"
+	@echo "  $(GREEN)make test-docker$(RESET)   - Run all tests in a dedicated container (CI-like)"
+	@echo "  $(GREEN)make test$(RESET)          - Run unit tests (local environment)"
 
 setup:
 	python3 -m venv venv
 	./venv/bin/pip install -r requirements.txt
 	@echo "Remember to copy .env.example to .env and configure it!"
 
-test:
-	PYTHONPATH=. ./venv/bin/python -m pytest tests/ -v
+clear-test-db:
+	@echo "Clearing test database..."
+	MONGO_DB_NAME=citybus_test PYTHONPATH=. ./venv/bin/python -c "import asyncio; from citybus.db.mongo import get_db, init_db; async def clear(): await init_db(); db=get_db(); await db.client.drop_database('citybus_test'); asyncio.run(clear())"
 
 load-gtfs:
 	@if [ -z "$(ZIP)" ]; then echo "Error: ZIP is required. Usage: make load-gtfs ZIP=path/to/gtfs.zip"; exit 1; fi
-	PYTHONPATH=. ./venv/bin/python citybus/scripts/load_gtfs.py $(ZIP) $(CITY)
+	docker-compose run --rm api python citybus/scripts/load_gtfs.py $(ZIP) $(CITY)
 
 run-api:
-	PYTHONPATH=. ./venv/bin/python main_api.py
+	docker-compose up -d api
 
 run-bot:
-	PYTHONPATH=. ./venv/bin/python main_bot.py
-
-stop-bot:
-	pkill -f "python main_bot.py" || true
-
-restart-bot: stop-bot run-bot
+	docker-compose up -d bot
 
 run-worker:
-	PYTHONPATH=. ./venv/bin/python main_worker.py
-
-stop-worker:
-	pkill -f "python main_worker.py" || true
-
-restart-worker: stop-worker run-worker
-
-mcp:
-	PYTHONPATH=. ./venv/bin/python -m citybus.mcp.server
+	docker-compose up -d worker
 
 run-all:
-	@echo "$(CYAN)Starting all services...$(RESET)"
-	PYTHONPATH=. ./venv/bin/python main_api.py & \
-	PYTHONPATH=. ./venv/bin/python main_worker.py & \
-	PYTHONPATH=. ./venv/bin/python main_bot.py & \
-	wait
+	docker-compose up -d
 
 stop-all:
-	@echo "$(CYAN)Stopping all services...$(RESET)"
-	pkill -f "python main_api.py|python main_worker.py|python main_bot.py" || true
+	docker-compose down
 
-restart-all: stop-all run-all
+test-docker:
+	@echo "Running all tests in isolated Docker containers..."
+	docker-compose -f docker-compose.test.yml up --build --exit-code-from tests
+	docker-compose -f docker-compose.test.yml down
+
+test:
+	@echo "Running unit tests locally..."
+	PYTHONPATH=. ./venv/bin/python -m pytest tests/test_api.py tests/test_commands.py tests/test_mcp.py -v
+
+test-integration:
+	@echo "Running integration tests locally..."
+	PYTHONPATH=. ./venv/bin/python -m pytest tests/test_integration.py -v

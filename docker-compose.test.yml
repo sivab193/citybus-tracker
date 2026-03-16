@@ -1,0 +1,29 @@
+services:
+  mongodb_test:
+    image: mongo:latest
+    container_name: citybus-mongo-test
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  tests:
+    build: .
+    container_name: citybus-tests
+    environment:
+      - MONGO_URI=mongodb://mongodb_test:27017
+      - MONGO_DB_NAME=citybus_test
+      - ADMIN_API_KEY=test_admin_key
+      - PYTHONPATH=.
+    depends_on:
+      mongodb_test:
+        condition: service_healthy
+    command: >
+      sh -c "
+      sleep 2 &&
+      python citybus/scripts/load_gtfs.py sample_data/lafayette/gtfs.zip lafayette &&
+      pytest tests/ -v
+      "

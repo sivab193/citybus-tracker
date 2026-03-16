@@ -14,8 +14,19 @@ _db: Optional[AsyncIOMotorDatabase] = None
 def get_db() -> AsyncIOMotorDatabase:
     """Return the MongoDB database, creating the client on first call."""
     global _client, _db
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
     if _client is None:
-        _client = AsyncIOMotorClient(settings.MONGO_URI, tlsCAFile=certifi.where())
+        # Only use certifi if we are likely hitting Atlas (SRV) or explicitly asking for SSL
+        kwargs = {"io_loop": loop}
+        if "mongodb+srv" in settings.MONGO_URI or "ssl=true" in settings.MONGO_URI.lower() or "tls=true" in settings.MONGO_URI.lower():
+            kwargs["tlsCAFile"] = certifi.where()
+            
+        _client = AsyncIOMotorClient(settings.MONGO_URI, **kwargs)
         _db = _client[settings.MONGO_DB_NAME]
     return _db
 
