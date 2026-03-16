@@ -169,12 +169,13 @@ async def stop_selected_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         pass
 
     if cached:
-        preview = "\n\n*Next arrivals:*\n"
+        preview_lines = ["\n\n*Next arrivals:*\n"]
         for key, secs in sorted(cached.items(), key=lambda x: x[1])[:3]:
             r_id = key.replace("route_", "")
             route = svc.get_route(r_id)
             r_name = route.route_short_name if route else r_id
-            preview += f"• {r_name}: {secs // 60} min\n"
+            preview_lines.append(f"• {r_name}: {secs // 60} min\n")
+        preview = "".join(preview_lines)
 
     text = f"📍 *{stop.stop_name}* ({stop.stop_id}){preview}\n\nSelect a route to track:"
     await query.edit_message_text(
@@ -530,10 +531,10 @@ async def _execute_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await update.message.reply_text(f"📅 *{stop.stop_name}*\nNo buses scheduled.", parse_mode="Markdown")
         return
 
-    msg = f"📅 *{stop.stop_name}*\n"
+    msg_lines = [f"📅 *{stop.stop_name}*\n"]
     if route_filter:
-        msg += f"Route: {route_filter}\n"
-    msg += f"{'Next ' + str(int(duration_min)) + ' mins' if duration_min else day_name.capitalize()}:\n\n"
+        msg_lines.append(f"Route: {route_filter}\n")
+    msg_lines.append(f"{'Next ' + str(int(duration_min)) + ' mins' if duration_min else day_name.capitalize()}:\n\n")
 
     for s in scheduled[:15]:
         t = s["time_seconds"]
@@ -545,11 +546,11 @@ async def _execute_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         route = svc.get_route(s["route_id"])
         r_name = route.route_short_name if route else s["route_id"]
         icon = "⏮️" if t < current_secs else "✅"
-        msg += f"{icon} *{h_d}:{m:02d}{ampm}* — {r_name} to {s['headsign']}\n"
+        msg_lines.append(f"{icon} *{h_d}:{m:02d}{ampm}* — {r_name} to {s['headsign']}\n")
 
     if len(scheduled) > 15:
-        msg += f"\n...and {len(scheduled) - 15} more."
-    await update.message.reply_text(msg, parse_mode="Markdown")
+        msg_lines.append(f"\n...and {len(scheduled) - 15} more.")
+    await update.message.reply_text("".join(msg_lines), parse_mode="Markdown")
 
 
 # ── /cancel ──
