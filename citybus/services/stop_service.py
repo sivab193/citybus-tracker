@@ -139,6 +139,7 @@ class StopService:
         if stop_id not in self.stop_times:
             return []
         arrivals = []
+        today = datetime.now(AGENCY_TZ).strftime("%Y%m%d")
         for secs, tid in self.stop_times[stop_id]:
             if secs < current_seconds:
                 continue
@@ -151,7 +152,6 @@ class StopService:
             if not svc or svc.get(day_of_week) != 1:
                 continue
             if "start_date" in svc and "end_date" in svc:
-                today = datetime.now(AGENCY_TZ).strftime("%Y%m%d")
                 if not (svc["start_date"] <= today <= svc["end_date"]):
                     continue
             arrivals.append({
