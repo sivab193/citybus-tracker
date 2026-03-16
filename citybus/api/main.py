@@ -20,6 +20,12 @@ from citybus.api.admin_routes import router as admin_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    
+    # Load GTFS static data into memory for the API
+    from citybus.services.stop_service import get_stop_service
+    svc = get_stop_service()
+    await svc.load_from_db(city_id="lafayette")
+    
     yield
 
 
@@ -50,22 +56,22 @@ def create_api() -> FastAPI:
 
     @app.middleware("http")
     async def global_request_tracker(request: Request, call_next):
-        """Increments a persistent request counter in MongoDB."""
-        # Async non-blocking increment (we don't wait for it to return to let the request proceed)
+        """Increments a persistent request counter in MongoDB for actual API usage."""
         from citybus.db.mongo import get_db
-        db = get_db()
-        if db is not None:
-             # We use a simple doc with _id='global' to store counters
-             # Using fire-and-forget logic (asyncio.create_task) would be faster but less reliable
-             # Since it's a local mongo, we can just await it
-             await db.stats.update_one(
-                 {"_id": "global"},
-                 {"$inc": {"total_requests": 1}},
-                 upsert=True
-             )
+        path = request.url.path
         
-        response = await call_next(request)
-        return response
+        # Only count functional API requests
+        # Filter: starts with /api/ AND is NOT the dashboard stats endpoint
+        if path.startswith("/api/") and not path.endswith("/meta/dashboard-stats"):
+            db = get_db()
+            if db is not None:
+                 await db.stats.update_one(
+                     {"_id": "global"},
+                     {"$inc": {"total_requests": 1}},
+                     upsert=True
+                 )
+        
+        return await call_next(request)
 
     # Error-logging middleware
     @app.middleware("http")

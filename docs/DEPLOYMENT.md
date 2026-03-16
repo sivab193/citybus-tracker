@@ -5,7 +5,7 @@ Deploy CityBus Bot to a **GCP Compute Engine** VM with automatic SSL via Caddy a
 ## Prerequisites
 
 - A GCP project with billing enabled
-- A domain managed in Google Cloud DNS (this guide uses `cb.siv19.dev`)
+- A domain managed in Google Cloud DNS (this guide uses `cbt.siv19.dev`)
 - A MongoDB Atlas cluster (free tier works)
 - The repo pushed to GitHub
 
@@ -59,7 +59,7 @@ In **Google Cloud DNS**, add an A record:
 
 | Type | Name | Value |
 |------|------|-------|
-| A | `cb.siv19.dev` | `<VM_EXTERNAL_IP>` |
+| A | `cbt.siv19.dev` | `<VM_EXTERNAL_IP>` |
 
 Find your VM's external IP:
 ```bash
@@ -72,7 +72,7 @@ gcloud compute instances describe citybus-prod --zone=us-east4-a \
 On the VM, edit the Caddyfile:
 ```bash
 sudo tee /etc/caddy/Caddyfile <<'EOF'
-cb.siv19.dev {
+cbt.siv19.dev {
     reverse_proxy localhost:8000
 }
 EOF
@@ -80,7 +80,7 @@ EOF
 sudo systemctl reload caddy
 ```
 
-Caddy automatically provisions a Let's Encrypt TLS certificate. Your site will be live at `https://cb.siv19.dev` once the app is running.
+Caddy automatically provisions a Let's Encrypt TLS certificate. Your site will be live at `https://cbt.siv19.dev` once the app is running.
 
 ## 5. Clone & Configure the App
 
