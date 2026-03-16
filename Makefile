@@ -34,8 +34,18 @@ run-api:
 run-bot:
 	PYTHONPATH=. ./venv/bin/python main_bot.py
 
+stop-bot:
+	pkill -f "python main_bot.py" || true
+
+restart-bot: stop-bot run-bot
+
 run-worker:
 	PYTHONPATH=. ./venv/bin/python main_worker.py
+
+stop-worker:
+	pkill -f "python main_worker.py" || true
+
+restart-worker: stop-worker run-worker
 
 mcp:
 	PYTHONPATH=. ./venv/bin/python -m citybus.mcp.server
@@ -46,3 +56,9 @@ run-all:
 	PYTHONPATH=. ./venv/bin/python main_worker.py & \
 	PYTHONPATH=. ./venv/bin/python main_bot.py & \
 	wait
+
+stop-all:
+	@echo "$(CYAN)Stopping all services...$(RESET)"
+	pkill -f "python main_api.py|python main_worker.py|python main_bot.py" || true
+
+restart-all: stop-all run-all

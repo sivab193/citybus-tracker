@@ -48,7 +48,7 @@ async def set_arrivals(stop_id: str, data: dict, ttl: int = None):
         ttl: TTL in seconds (defaults to settings.REDIS_ARRIVAL_TTL)
     """
     r = get_redis()
-    ttl = ttl or settings.REDIS_ARRIVAL_TTL
+    ttl = ttl or settings.get_config("REDIS_ARRIVAL_TTL", 30)
     await r.set(f"arrivals:{stop_id}", json.dumps(data), ex=ttl)
 
 
@@ -70,7 +70,38 @@ async def set_vehicle(vehicle_id: str, data: dict, ttl: int = 30):
 async def get_vehicle(vehicle_id: str) -> Optional[dict]:
     """Get cached vehicle position."""
     r = get_redis()
-    raw = await r.get(f"vehicle:{vehicle_id}")
     if raw:
         return json.loads(raw)
     return None
+
+# ── Distributed Locks ──
+
+async def acquire_service_lock(service_name: str, timeout: int = 30) -> bool:
+    """Acquire a lock to ensure only one instance of a service (bot, worker) runs.
+    
+    Args:
+        service_name: "bot" or "worker"
+        timeout: Lock expiry in seconds.
+    Returns:
+        True if lock was acquired, False if another instance already holds it.
+    """
+    r = get_redis()
+    key = f"lock:{service_name}"
+    # setnx (set if not exists) is achieved using nx=True
+    acquired = await r.set(key, "running", nx=True, ex=timeout)
+    return bool(acquired)
+
+
+async def renew_service_lock(service_name: str, timeout: int = 30):
+    """Renew the lock continuously. Should be run in a background task."""
+    import asyncio
+    r = get_redis()
+    key = f"lock:{service_name}"
+    
+    while True:
+        try:
+            # Only extend if we still hold it (we assume we do since we are running)
+            await r.expire(key, timeout)
+        except Exception:
+            pass
+        await asyncio.sleep(timeout / 2)

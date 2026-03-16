@@ -1,0 +1,7 @@
+# Overrides for production deployment.
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+services:
+  api:
+    command: uvicorn main_api:app --host 0.0.0.0 --port 8000 --workers 2
+    # No --reload in production; 2 workers for concurrency

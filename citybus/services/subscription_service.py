@@ -32,9 +32,10 @@ async def create_subscription(
     Raises:
         ValueError if limits exceeded or frequency not allowed.
     """
-    if frequency not in settings.ALLOWED_FREQUENCIES:
+    allowed = settings.get_config("ALLOWED_FREQUENCIES", [10, 20, 30, 60, 120, 300, 600])
+    if frequency not in allowed:
         raise ValueError(
-            f"Frequency must be one of {settings.ALLOWED_FREQUENCIES} seconds"
+            f"Frequency must be one of {allowed} seconds"
         )
 
     db = get_db()
@@ -43,9 +44,10 @@ async def create_subscription(
     active_count = await db.subscriptions.count_documents(
         {"user_id": user_id, "status": "active"}
     )
-    if active_count >= settings.MAX_ACTIVE_SUBSCRIPTIONS:
+    max_subs = settings.get_config("MAX_ACTIVE_SUBSCRIPTIONS", 3)
+    if active_count >= max_subs:
         raise ValueError(
-            f"Max {settings.MAX_ACTIVE_SUBSCRIPTIONS} active subscriptions allowed. "
+            f"Max {max_subs} active subscriptions allowed. "
             "Stop one first with /stop."
         )
 
@@ -107,7 +109,7 @@ async def get_active_subscriptions(user_id: int) -> list[dict]:
     """Get all active subscriptions for a user."""
     db = get_db()
     cursor = db.subscriptions.find({"user_id": user_id, "status": "active"})
-    return await cursor.to_list(length=settings.MAX_ACTIVE_SUBSCRIPTIONS)
+    return await cursor.to_list(length=settings.get_config("MAX_ACTIVE_SUBSCRIPTIONS", 3))
 
 
 async def get_all_active_subscriptions() -> list[dict]:
@@ -134,7 +136,7 @@ async def record_notification(sub_id: str) -> Optional[dict]:
         return None
 
     # Auto-stop after max notifications
-    if result["sent_count"] >= settings.MAX_NOTIFICATIONS_PER_SUB:
+    if result["sent_count"] >= settings.get_config("MAX_NOTIFICATIONS_PER_SUB", 100):
         await stop_subscription(sub_id)
         return None
 
@@ -144,7 +146,8 @@ async def record_notification(sub_id: str) -> Optional[dict]:
 async def cleanup_inactive():
     """Stop subscriptions inactive for INACTIVITY_TIMEOUT_MINUTES."""
     db = get_db()
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.INACTIVITY_TIMEOUT_MINUTES)
+    timeout_mins = settings.get_config("INACTIVITY_TIMEOUT_MINUTES", 30)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_mins)
 
     # Find active subs where last_sent is older than cutoff (or never sent and created long ago)
     inactive = await db.subscriptions.find(

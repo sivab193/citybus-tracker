@@ -6,6 +6,7 @@ Includes user commands (/start, /search, /arrivals, /status, /stop,
 (/admin_stats, /admin_users, /admin_errors, /admin_broadcast, /debug).
 """
 
+import re
 from datetime import datetime, timezone
 
 from telegram import Update
@@ -13,7 +14,10 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from citybus.config import settings
 from citybus.services.stop_service import get_stop_service
-from citybus.services.user_service import get_or_create_user, add_favorite, remove_favorite
+from citybus.services.user_service import (
+    get_or_create_user, add_favorite, remove_favorite,
+    check_registered_username_exists, set_registered_username
+)
 from citybus.services.subscription_service import (
     create_subscription, stop_user_subscriptions, get_active_subscriptions,
 )
@@ -27,45 +31,95 @@ from citybus.logging.logger import log_general
 
 # Conversation states
 SELECTING_STOP, SELECTING_ROUTE, SELECTING_FREQUENCY = range(3)
+WAITING_FOR_USERNAME = 99
+WAITING_FOR_SEARCH = 100
+WAITING_FOR_ARRIVALS = 101
+WAITING_FOR_TRACK = 102
+WAITING_FOR_FAV = 103
+WAITING_FOR_UNFAV = 104
+WAITING_FOR_SCHEDULE = 105
+WAITING_FOR_LIST = 106
 
-HELP_MESSAGE = (
-    "👋 *Welcome to the CityBus Tracker!*\n\n"
-    "I can help you track bus arrivals in real-time for CityBus of Greater Lafayette.\n\n"
-    "*Commands:*\n"
-    "• `/search <name>` — Search for a bus stop\n"
-    "• `/arrivals <stop>` — Check arrivals at a stop\n"
-    "• `/schedule <stop> [route] [time]` — Planned schedule\n"
-    "• `/status` — Show your active tracking\n"
-    "• `/stop` — Stop all notifications\n"
-    "• `/favorites` — View favorite stops\n"
-    "• `/fav <stop>` — Add a stop to favorites\n"
-    "• `/unfav <stop>` — Remove a stop from favorites\n\n"
-    "Try: `/search walmart` or `/arrivals BUS215`!"
-)
+def get_help_message(username: str) -> str:
+    return (
+        f"👋 *Hi {username}! Welcome to CityBus Tracker.*\n\n"
+        "Here are the most important commands:\n"
+        "• `/search <name>` — Find a bus stop\n"
+        "• `/arrivals <stop>` — Live bus arrivals\n"
+        "• `/track <stop|f1>` — Quick start notifications\n"
+        "• `/status` — View your active tracking\n"
+        "• `/stop` — Stop all notifications\n\n"
+        "Tap a command to start!"
+    )
 
 
-async def _ensure_user(update: Update) -> dict:
-    """Ensure the user exists in the database."""
+async def _ensure_user(update: Update) -> dict | None:
+    """Ensure the user exists and has a registered username."""
     user = update.effective_user
-    return await get_or_create_user(user.id, username=user.username)
+    db_user = await get_or_create_user(user.id, username=user.username)
+    if not db_user.get("registered_username"):
+        if update.message:
+            await update.message.reply_text("⚠️ You must register a unique username first. Please type /start to begin.")
+        elif update.callback_query:
+            await update.callback_query.answer("Please type /start to register a username first.", show_alert=True)
+        return None
+    return db_user
 
 
-# ── /start ──
+# ── /start & Registration ──
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _ensure_user(update)
-    await update.message.reply_text(HELP_MESSAGE, parse_mode="Markdown")
+    user = update.effective_user
+    db_user = await get_or_create_user(user.id, username=user.username)
+    
+    if not db_user.get("registered_username"):
+        await update.message.reply_text(
+            "👋 *Welcome to the CityBus Tracker!*\n\n"
+            "To get started, please reply with a unique alphanumeric username (3-15 characters).",
+            parse_mode="Markdown"
+        )
+        return WAITING_FOR_USERNAME
+
+    await update.message.reply_text(get_help_message(db_user["registered_username"]), parse_mode="Markdown")
+    return ConversationHandler.END
+
+
+async def register_username_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    username_input = update.message.text.strip().lower()
+    
+    if not re.match(r"^[a-z0-9]{3,15}$", username_input):
+        await update.message.reply_text("Username must be 3-15 characters and contain only letters and numbers. Please try again:")
+        return WAITING_FOR_USERNAME
+        
+    if await check_registered_username_exists(username_input):
+        await update.message.reply_text(f"❌ Username '{username_input}' is already taken. Please choose another one:")
+        return WAITING_FOR_USERNAME
+        
+    await set_registered_username(user.id, username_input)
+    await update.message.reply_text(
+        f"✅ Registration complete!\n\n" + get_help_message(username_input),
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
 
 
 # ── /search ──
 
 async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await _ensure_user(update)
-    if not context.args:
-        await update.message.reply_text("Usage: `/search <stop name>`", parse_mode="Markdown")
+    user = await _ensure_user(update)
+    if not user:
         return ConversationHandler.END
+    if not context.args:
+        await update.message.reply_text("Please type the name of the stop you want to search for:")
+        return WAITING_FOR_SEARCH
 
-    query = " ".join(context.args)
+    return await _execute_search(update, context, " ".join(context.args))
+
+async def search_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    return await _execute_search(update, context, update.message.text.strip())
+
+async def _execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str) -> int:
     svc = get_stop_service()
     stops = svc.search_stops(query, limit=6)
     await log_general(command="/search", user_id=update.effective_user.id, params={"query": query})
@@ -95,6 +149,12 @@ async def stop_selected_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     stop_id = data.split(":")[1]
     context.user_data["selected_stop"] = stop_id
+
+    # --- Next Bus Validation ---
+    next_bus_msg, can_track = await get_next_bus_info(stop_id)
+    if not can_track:
+        await query.edit_message_text(f"🛑 *No buses departing in the next 2 hours.*\n\n{next_bus_msg}", parse_mode="Markdown")
+        return ConversationHandler.END
 
     svc = get_stop_service()
     stop = svc.get_stop(stop_id)
@@ -196,12 +256,21 @@ async def frequency_selected_cb(update: Update, context: ContextTypes.DEFAULT_TY
 # ── /arrivals ──
 
 async def arrivals_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _ensure_user(update)
+    user = await _ensure_user(update)
+    if not user:
+        return ConversationHandler.END
     if not context.args:
-        await update.message.reply_text("Usage: `/arrivals <stop_id>`", parse_mode="Markdown")
-        return
+        await update.message.reply_text("Please type the stop ID to check arrivals (e.g. BUS215):")
+        return WAITING_FOR_ARRIVALS
 
-    search_term = context.args[0]
+    await _execute_arrivals(update, context, context.args[0])
+    return ConversationHandler.END
+
+async def arrivals_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await _execute_arrivals(update, context, update.message.text.strip())
+    return ConversationHandler.END
+
+async def _execute_arrivals(update: Update, context: ContextTypes.DEFAULT_TYPE, search_term: str):
     svc = get_stop_service()
     stop = svc.get_stop(search_term.upper())
     if not stop:
@@ -243,10 +312,68 @@ async def arrivals_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Failed to fetch arrivals: {e}")
 
 
+# ── /track ──
+
+async def track_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = await _ensure_user(update)
+    if not user:
+        return ConversationHandler.END
+    if not context.args:
+        await update.message.reply_text("Please type the stop ID or favorite (e.g. f1) to track:")
+        return WAITING_FOR_TRACK
+
+    return await _execute_track(update, context, user, context.args[0])
+
+async def track_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = await _ensure_user(update)
+    return await _execute_track(update, context, user, update.message.text.strip())
+
+async def _execute_track(update: Update, context: ContextTypes.DEFAULT_TYPE, user: dict, raw_query: str) -> int:
+    query = raw_query.lower()
+    stop_id = None
+    
+    # Check if favorite (e.g. f1, f2)
+    if query.startswith("f") and query[1:].isdigit():
+        idx = int(query[1:]) - 1
+        favs = user.get("favorites", [])
+        if 0 <= idx < len(favs):
+            stop_id = favs[idx]
+        else:
+            await update.message.reply_text(f"Favorite f{idx+1} not found. Check `/favorites`.", parse_mode="Markdown")
+            return ConversationHandler.END
+    else:
+        stop_id = query.upper()
+        
+    svc = get_stop_service()
+    stop = svc.get_stop(stop_id)
+    if not stop:
+        await update.message.reply_text(f"Stop '{stop_id}' not found. Use `/search` first.", parse_mode="Markdown")
+        return ConversationHandler.END
+        
+    # --- Next Bus Validation ---
+    next_bus_msg, can_track = await get_next_bus_info(stop_id)
+    if not can_track:
+        await update.message.reply_text(f"🛑 *No buses departing in the next 2 hours.*\n\n{next_bus_msg}", parse_mode="Markdown")
+        return ConversationHandler.END
+
+    # Start tracking flow
+    context.user_data["selected_stop"] = stop_id
+    routes = svc.get_routes_for_stop(stop_id)
+    text = f"📍 *{stop.stop_name}* ({stop.stop_id})\n\nSelect a route to track:"
+    await update.message.reply_text(
+        text,
+        reply_markup=route_list_keyboard(routes),
+        parse_mode="Markdown",
+    )
+    return SELECTING_ROUTE
+
+
 # ── /status ──
 
 async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _ensure_user(update)
+    user = await _ensure_user(update)
+    if not user:
+        return
     subs = await get_active_subscriptions(update.effective_user.id)
     if not subs:
         await update.message.reply_text("You have no active subscriptions.\nUse `/search <stop>` to start.", parse_mode="Markdown")
@@ -281,6 +408,8 @@ async def stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def favorites_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await _ensure_user(update)
+    if not user:
+        return
     favs = user.get("favorites", [])
     if not favs:
         await update.message.reply_text("No favorites yet. Use `/fav <stop_id>` to add one.", parse_mode="Markdown")
@@ -294,19 +423,43 @@ async def favorites_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _ensure_user(update)
+    if not user:
+        return ConversationHandler.END
     if not context.args:
-        await update.message.reply_text("Usage: `/fav <stop_id>`", parse_mode="Markdown")
-        return
-    sid = context.args[0].upper()
+        await update.message.reply_text("Please type the stop ID to add to favorites:")
+        return WAITING_FOR_FAV
+    
+    await _execute_fav(update, context, context.args[0])
+    return ConversationHandler.END
+
+async def fav_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _execute_fav(update, context, update.message.text.strip())
+    return ConversationHandler.END
+
+async def _execute_fav(update: Update, context: ContextTypes.DEFAULT_TYPE, stop_id: str):
+    sid = stop_id.upper()
     ok = await add_favorite(update.effective_user.id, sid)
     await update.message.reply_text(f"⭐ Added `{sid}` to favorites." if ok else f"`{sid}` already in favorites.", parse_mode="Markdown")
 
 
 async def unfav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _ensure_user(update)
+    if not user:
+        return ConversationHandler.END
     if not context.args:
-        await update.message.reply_text("Usage: `/unfav <stop_id>`", parse_mode="Markdown")
-        return
-    sid = context.args[0].upper()
+        await update.message.reply_text("Please type the stop ID to remove from favorites:")
+        return WAITING_FOR_UNFAV
+        
+    await _execute_unfav(update, context, context.args[0])
+    return ConversationHandler.END
+
+async def unfav_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _execute_unfav(update, context, update.message.text.strip())
+    return ConversationHandler.END
+
+async def _execute_unfav(update: Update, context: ContextTypes.DEFAULT_TYPE, stop_id: str):
+    sid = stop_id.upper()
     ok = await remove_favorite(update.effective_user.id, sid)
     await update.message.reply_text(f"Removed `{sid}` from favorites." if ok else f"`{sid}` not in favorites.", parse_mode="Markdown")
 
@@ -314,12 +467,22 @@ async def unfav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── /schedule ──
 
 async def schedule_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _ensure_user(update)
+    user = await _ensure_user(update)
+    if not user:
+        return ConversationHandler.END
     if not context.args:
-        await update.message.reply_text("Usage: `/schedule <stop> [route] [duration]`", parse_mode="Markdown")
-        return
+        await update.message.reply_text("Please type the stop ID for the schedule:")
+        return WAITING_FOR_SCHEDULE
 
-    args = list(context.args)
+    await _execute_schedule(update, context, list(context.args))
+    return ConversationHandler.END
+
+async def schedule_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = update.message.text.strip().split()
+    await _execute_schedule(update, context, args)
+    return ConversationHandler.END
+
+async def _execute_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, args: list[str]):
     duration_min = None
     route_filter = None
 
@@ -354,7 +517,7 @@ async def schedule_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Stop '{query}' not found.")
         return
 
-    now = datetime.now()
+    now = datetime.now(tz=__import__('zoneinfo').ZoneInfo("America/Indiana/Indianapolis"))
     day_name = now.strftime("%A").lower()
     current_secs = now.hour * 3600 + now.minute * 60 + now.second
     dur_secs = int(duration_min * 60) if duration_min else None
@@ -403,7 +566,46 @@ async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ── Unknown message handler ──
 
 async def unknown_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(HELP_MESSAGE, parse_mode="Markdown")
+    user = await _ensure_user(update)
+    if not user:
+        return
+    await update.message.reply_text(get_help_message(user.get("registered_username", "")), parse_mode="Markdown")
+
+
+async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List all available commands, including admin ones if applicable."""
+    user = await _ensure_user(update)
+    if not user:
+        return
+    
+    is_admin = _is_admin(update.effective_user.id)
+    
+    commands = [
+        "📖 *Available Commands:*\n",
+        "• `/search <name>` — Find a bus stop",
+        "• `/arrivals <stop>` — Live bus arrivals",
+        "• `/track <stop|f1>` — Quick start notifications",
+        "• `/status` — View your active tracking",
+        "• `/stop` — Stop all notifications",
+        "• `/favorites` — View favorites",
+        "• `/fav <stop>` — Add favorite",
+        "• `/unfav <stop>` — Remove favorite",
+        "• `/schedule <stop>` — Planned schedule",
+        "• `/cancel` — Cancel current menu flow",
+        "• `/list` — This command list"
+    ]
+    
+    if is_admin:
+        commands.extend([
+            "\n⚡ *Admin Commands:*",
+            "• `/admin_stats` — System usage",
+            "• `/admin_users` — Recent users",
+            "• `/admin_errors` — Recent logs",
+            "• `/admin_broadcast` — Send msg to everyone",
+            "• `/debug` — Build & Config info"
+        ])
+    
+    await update.message.reply_text("\n".join(commands), parse_mode="Markdown")
 
 
 # ════════════════════════════════════════════
@@ -411,7 +613,8 @@ async def unknown_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ════════════════════════════════════════════
 
 def _is_admin(user_id: int) -> bool:
-    return user_id in settings.ADMIN_IDS
+    admin_ids = settings.get_config("ADMIN_IDS", [])
+    return user_id in admin_ids
 
 
 async def admin_stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -488,8 +691,58 @@ async def debug_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Stops loaded: {len(svc.stops)}\n"
         f"Routes loaded: {len(svc.routes)}\n"
         f"Trips loaded: {len(svc.trips)}\n"
-        f"Admin IDs: {settings.ADMIN_IDS}\n"
-        f"Worker poll: {settings.WORKER_POLL_INTERVAL}s\n"
+        f"Worker poll: {settings.get_config('WORKER_POLL_INTERVAL', 10)}s\n"
         f"Redis URL: {settings.REDIS_URL[:30]}...",
         parse_mode="Markdown",
     )
+
+
+# ════════════════════════════════════════════
+# Helpers
+# ════════════════════════════════════════════
+
+async def get_next_bus_info(stop_id: str) -> tuple[str, bool]:
+    """
+    Checks for upcoming buses at a stop.
+    Returns (message, is_tracking_allowed).
+    Tracking is only allowed if a bus is coming in the next 2 hours.
+    Uses agency timezone (Eastern) for schedule lookups.
+    """
+    from zoneinfo import ZoneInfo
+    AGENCY_TZ = ZoneInfo("America/Indiana/Indianapolis")
+
+    svc = get_stop_service()
+    now = datetime.now(AGENCY_TZ)
+    day_name = now.strftime("%A").lower()
+    current_secs = now.hour * 3600 + now.minute * 60 + now.second
+
+    # 1. Check Real-time (Redis)
+    cached = await get_arrivals(stop_id)
+    if cached:
+        min_secs = min(cached.values())
+        if min_secs <= 7200: # 2 hours
+            return f"Next bus in {min_secs // 60} mins.", True
+
+    # 2. Check Schedule (Static) - 2 hours
+    scheduled_2h = svc.get_scheduled_arrivals(stop_id, day_name, current_secs, 7200)
+    if scheduled_2h:
+        first = scheduled_2h[0]
+        wait_mins = (first["time_seconds"] - current_secs) // 60
+        return f"Next scheduled bus in {wait_mins} mins.", True
+
+    # 3. No bus in 2 hours - Find the absolute next bus
+    # Check remaining of today
+    scheduled_today = svc.get_scheduled_arrivals(stop_id, day_name, current_secs)
+    if scheduled_today:
+        first = scheduled_today[0]
+        t = first["time_seconds"]
+        h, m = t // 3600, (t % 3600) // 60
+        if h >= 24: h -= 24
+        ampm = "AM" if h < 12 else "PM"
+        h_d = h if 1 <= h <= 12 else (h - 12 if h > 12 else 12)
+        wait_hrs = (t - current_secs) / 3600
+        return f"No buses now. The next bus is at {h_d}:{m:02d} {ampm} ({wait_hrs:.1f} hrs away).", False
+
+    # Check tomorrow (simplified: just list it as "tomorrow")
+    return "No buses found for the remainder of today. Please check back later.", False
+

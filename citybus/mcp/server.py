@@ -27,6 +27,8 @@ mcp = FastMCP(
         "Use these tools to look up bus stops, routes, schedules, "
         "real-time arrivals, vehicle locations, and service alerts."
     ),
+    host="0.0.0.0",
+    port=8001,
 )
 
 
@@ -137,4 +139,6 @@ async def get_arrivals(stop_id: str, route_id: Optional[str] = None) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    import sys
+    transport = "sse" if "--sse" in sys.argv else "stdio"
+    mcp.run(transport=transport)

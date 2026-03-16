@@ -22,8 +22,26 @@ async def post_init(app: Application):
     print("Loading GTFS static data from MongoDB...")
     from citybus.db.mongo import init_db
     await init_db()
+    
+    from citybus.config import settings
+    await settings.get_dynamic_config()
+    
+    # ── Acquire Distributed Lock ──
+    from citybus.db.redis import acquire_service_lock, renew_service_lock
+    import asyncio
+    import sys
+    
+    if not await acquire_service_lock("bot", timeout=30):
+        print("❌ CRITICAL: Another citybus-bot instance is already running!")
+        logger.error("Failed to acquire Redis lock for 'bot'. Terminating.")
+        sys.exit(1)
+        
+    # Start heartbeat lock renewal in background
+    asyncio.create_task(renew_service_lock("bot", timeout=30))
+    print("✅ Acquired Redis exclusive instance lock for Bot")
+
     svc = get_stop_service()
-    await svc.load_from_db()
+    await svc.load_from_db(city_id="lafayette")
     print(f"Loaded {len(svc.stops)} stops and {len(svc.routes)} routes")
 
 

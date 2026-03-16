@@ -37,6 +37,11 @@ async def process_notifications(bot_token: str):
             # Check if it's time to send
             last = sub.get("last_sent")
             freq = sub["frequency"]
+            
+            # Ensure last_sent is UTC aware if it came from DB as aware
+            if last and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+
             if last:
                 elapsed = (now - last).total_seconds()
                 if elapsed < freq:
@@ -48,6 +53,7 @@ async def process_notifications(bot_token: str):
             # Get arrivals from Redis cache
             cached = await get_arrivals(stop_id)
             if not cached:
+                logger.debug(f"Subscription {sub['_id']}: No real-time arrivals in cache for stop {stop_id}")
                 continue
 
             # Build message

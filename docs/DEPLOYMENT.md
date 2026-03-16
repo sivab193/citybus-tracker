@@ -1,84 +1,194 @@
 # Deployment Guide
 
+Deploy CityBus Bot to a **GCP Compute Engine** VM with automatic SSL via Caddy and CI/CD via GitHub Actions.
+
 ## Prerequisites
 
-- Python 3.11+
-- MongoDB Atlas account (or local MongoDB)
-- Redis Cloud account (or local Redis)
-- Google Cloud account (for cloud deployment)
+- A GCP project with billing enabled
+- A domain managed in Google Cloud DNS (this guide uses `cb.siv19.dev`)
+- A MongoDB Atlas cluster (free tier works)
+- The repo pushed to GitHub
 
-## Local Development
+---
 
-```bash
-# 1. Setup
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your values
-
-# 2. Start services (separate terminals)
-python main_api.py          # API server
-python main_bot.py          # Telegram bot
-python main_worker.py       # Background worker
-
-# 3. Test MCP with LM Studio
-# In LM Studio: Add tool server → Command: python -m citybus.mcp.server
-# Working directory: /path/to/citybus-bot
-```
-
-## Cloud Deployment
-
-### One-Time GCP Setup
+## 1. Create the GCE VM
 
 ```bash
-./scripts/setup_gcp.sh
+gcloud compute instances create citybus-prod \
+  --zone=us-east4-a \
+  --machine-type=e2-small \
+  --image-family=debian-12 \
+  --image-project=debian-cloud \
+  --boot-disk-size=20GB \
+  --tags=http-server,https-server
+
+# Allow HTTP + HTTPS
+gcloud compute firewall-rules create allow-http  --allow tcp:80  --target-tags http-server
+gcloud compute firewall-rules create allow-https --allow tcp:443 --target-tags https-server
 ```
 
-### API → Cloud Run
+## 2. Install Docker & Caddy on the VM
+
+SSH into the VM:
+```bash
+gcloud compute ssh citybus-prod --zone=us-east4-a
+```
+
+Then run:
+```bash
+# Docker (from Debian packages — most reliable on Debian 12)
+sudo apt update
+sudo apt install -y docker.io docker-compose
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Verify
+docker --version
+docker-compose --version
+
+# Caddy (reverse proxy + auto-SSL)
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install -y caddy
+```
+
+## 3. Point Your Domain
+
+In **Google Cloud DNS**, add an A record:
+
+| Type | Name | Value |
+|------|------|-------|
+| A | `cb.siv19.dev` | `<VM_EXTERNAL_IP>` |
+
+Find your VM's external IP:
+```bash
+gcloud compute instances describe citybus-prod --zone=us-east4-a \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+```
+
+## 4. Configure Caddy
+
+On the VM, edit the Caddyfile:
+```bash
+sudo tee /etc/caddy/Caddyfile <<'EOF'
+cb.siv19.dev {
+    reverse_proxy localhost:8000
+}
+EOF
+
+sudo systemctl reload caddy
+```
+
+Caddy automatically provisions a Let's Encrypt TLS certificate. Your site will be live at `https://cb.siv19.dev` once the app is running.
+
+## 5. Clone & Configure the App
 
 ```bash
-./scripts/deploy_cloudrun.sh [project-id] [region]
+cd ~
+git clone https://github.com/sivab193/citybus-bot.git citybus-tracker
+cd citybus-tracker
+
+# Create .env with your secrets
+cat > .env <<'EOF'
+TELEGRAM_BOT_TOKEN=your_token_here
+MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/citybus
+REDIS_URL=redis://redis:6379/0
+EOF
 ```
 
-### Worker + Bot → Compute Engine
+## 6. Start the Application
 
 ```bash
-./scripts/deploy_worker_vm.sh <server_ip> [ssh_user]
+cd ~/citybus-tracker
+docker-compose up -d --build
 ```
 
-This creates two systemd services:
-- `citybus-worker` — GTFS poller + notification sender
-- `citybus-bot` — Telegram bot
+Check that everything is running:
+```bash
+docker-compose ps
+docker-compose logs -f    # watch logs (Ctrl+C to exit)
+```
 
-### Monitoring
+### Lifecycle Commands
+
+| Action | Command |
+|--------|---------|
+| **Start** | `docker-compose up -d` |
+| **Stop** | `docker-compose down` |
+| **Rebuild** | `docker-compose up -d --build` |
+| **Logs** | `docker-compose logs -f` |
+| **Status** | `docker-compose ps` |
+| **Restart one service** | `docker-compose restart api` |
+
+---
+
+## 7. Set Up Auto-Deployment (GitHub Actions)
+
+Every push to `main` will automatically deploy to your VM.
+
+### Generate an SSH Key Pair
+
+On your **local machine**:
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/citybus_deploy -C "github-actions" -N ""
+```
+
+### Add the Public Key to the VM using `gcloud`
+
+You can use the `gcloud` CLI to inject this key into your VM's authorized list without even logging in:
 
 ```bash
-# Worker logs
-ssh user@server 'sudo journalctl -u citybus-worker -f'
-
-# Bot logs
-ssh user@server 'sudo journalctl -u citybus-bot -f'
-
-# Cloud Run logs
-gcloud logging read "resource.type=cloud_run_revision" --limit 50
+cat ~/.ssh/citybus_deploy.pub | gcloud compute ssh citybus-tracker \
+  --zone=us-east5-a \
+  --project=hidden-talon-484715-b0 \
+  --command='mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys'
 ```
 
-## External Services
+### Add GitHub Secrets
 
-### MongoDB Atlas
+Go to your repo → **Settings → Secrets and variables → Actions** → Add these:
 
-1. Create cluster at [cloud.mongodb.com](https://cloud.mongodb.com)
-2. Create database user
-3. Whitelist IPs (or use 0.0.0.0/0 for dev)
-4. Copy connection string to `MONGO_URI` in `.env`
+| Secret Name | Value |
+|-------------|-------|
+| `GCE_HOST` | VM external IP address |
+| `GCE_USER` | SSH username on the VM (e.g., `sivab`) |
+| `SSH_PRIVATE_KEY` | Contents of `~/.ssh/citybus_deploy` (the **private** key file) |
 
-### Redis Cloud
+### Test the Pipeline
 
-1. Create database at [redis.com](https://redis.com/try-free)
-2. Copy endpoint to `REDIS_URL` in `.env` as `redis://default:password@host:port`
+Push any commit to `main`:
+```bash
+git add . && git commit -m "Enable CI/CD" && git push origin main
+```
 
-## Adding New GTFS Feeds
+Go to **GitHub → Actions** tab to watch the deploy run.
 
-1. Download GTFS zip from transit agency
-2. Extract to `data/` directory (stops.txt, routes.txt, trips.txt, stop_times.txt, calendar.txt)
-3. Restart the services — GTFS is loaded at startup
+**What the pipeline does:**
+```
+SSH into VM → cd ~/citybus-tracker → git pull → docker-compose down → docker-compose up -d --build
+```
+
+---
+
+## 8. Production Hardening (Optional)
+
+A `docker-compose.prod.yml` override is available that:
+- Removes `--reload` from uvicorn (dev-only feature)
+- Adds 2 uvicorn workers for better concurrency
+
+To use it, update the GitHub Actions deploy script to:
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| Bot not responding | `docker-compose logs bot` — check for token errors |
+| API returning 502 | `docker-compose logs api` then `curl localhost:8000/health` |
+| SSL not working | `sudo systemctl status caddy` then `sudo journalctl -u caddy` |
+| Manual redeploy | `cd ~/citybus-tracker && git pull && docker-compose up -d --build` |

@@ -8,6 +8,10 @@ Loads static GTFS data from MongoDB into memory for fast lookup.
 import math
 from typing import Optional
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# CityBus of Greater Lafayette, Indiana
+AGENCY_TZ = ZoneInfo("America/Indiana/Indianapolis")
 
 from rapidfuzz import fuzz, process
 
@@ -20,7 +24,9 @@ class StopService:
 
     def __init__(self):
         self.stops: dict[str, Stop] = {}
+        self._stops_upper: dict[str, str] = {}  # UPPER -> original key
         self.routes: dict[str, Route] = {}
+        self._routes_upper: dict[str, str] = {}  # UPPER -> original key
         self.stop_routes: dict[str, set[str]] = {}
         self.route_stops: dict[str, set[str]] = {}
         self.calendar: dict[str, dict] = {}
@@ -33,15 +39,19 @@ class StopService:
         
         # Load Stops
         self.stops.clear()
+        self._stops_upper.clear()
         async for doc in db.stops.find({"city_id": city_id}):
             doc["_id"] = doc["_id"]
             self.stops[doc["_id"]] = Stop(**doc)
+            self._stops_upper[doc["_id"].upper()] = doc["_id"]
             
         # Load Routes
         self.routes.clear()
+        self._routes_upper.clear()
         async for doc in db.routes.find({"city_id": city_id}):
             doc["_id"] = doc["_id"]
             self.routes[doc["_id"]] = Route(**doc)
+            self._routes_upper[doc["_id"].upper()] = doc["_id"]
             
         # Load Calendar
         self.calendar.clear()
@@ -84,26 +94,46 @@ class StopService:
     # ── Query methods ──
 
     def get_stop(self, stop_id: str) -> Optional[Stop]:
-        return self.stops.get(stop_id)
+        """Case-insensitive stop lookup."""
+        s = self.stops.get(stop_id)
+        if s:
+            return s
+        # Fallback: case-insensitive
+        canonical = self._stops_upper.get(stop_id.upper())
+        return self.stops.get(canonical) if canonical else None
 
     def get_route(self, route_id: str) -> Optional[Route]:
-        return self.routes.get(route_id)
+        """Case-insensitive route lookup."""
+        r = self.routes.get(route_id)
+        if r:
+            return r
+        canonical = self._routes_upper.get(route_id.upper())
+        return self.routes.get(canonical) if canonical else None
 
     def get_routes_for_stop(self, stop_id: str) -> list[Route]:
-        route_ids = self.stop_routes.get(stop_id, set())
+        # Resolve canonical ID
+        canonical = self._stops_upper.get(stop_id.upper(), stop_id)
+        route_ids = self.stop_routes.get(canonical, set())
         return [self.routes[rid] for rid in route_ids if rid in self.routes]
 
     def search_stops(self, query: str, limit: int = 5) -> list[Stop]:
         if not query:
             return []
         q = query.lower()
+        
+        # 1. Exact match by code or ID
         exact = [s for s in self.stops.values() if q in s.stop_id.lower() or (s.stop_code and q in s.stop_code.lower())]
         if exact:
             exact.sort(key=lambda s: len(s.stop_id))
             return exact[:limit]
+            
+        # 2. Fuzzy match by stop name
         names = {s.stop_id: s.stop_name for s in self.stops.values()}
+        # process.extract on a dict returns a list of tuples: (matched_value, score, key)
         results = process.extract(query, names, scorer=fuzz.WRatio, limit=limit)
-        return [self.stops[r[2]] for r in results if r[1] > 50]
+        
+        # Filter for decent matches (score > 50) and map back using the key
+        return [self.stops[r[2]] for r in results if r[1] > 50 and r[2] in self.stops]
 
     def get_scheduled_arrivals(self, stop_id: str, day_of_week: str, current_seconds: int, duration_seconds: int = None) -> list[dict]:
         if stop_id not in self.stop_times:
@@ -121,7 +151,7 @@ class StopService:
             if not svc or svc.get(day_of_week) != 1:
                 continue
             if "start_date" in svc and "end_date" in svc:
-                today = datetime.now().strftime("%Y%m%d")
+                today = datetime.now(AGENCY_TZ).strftime("%Y%m%d")
                 if not (svc["start_date"] <= today <= svc["end_date"]):
                     continue
             arrivals.append({

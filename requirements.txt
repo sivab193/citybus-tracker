@@ -14,6 +14,7 @@ rapidfuzz
 # ─── Database ───
 motor                           # MongoDB async driver
 pymongo                         # MongoDB sync (for scripts)
+certifi                         # Root certificates for SSL
 redis[hiredis]                  # Redis async with C parser
 
 # ─── HTTP ───
@@ -23,6 +24,7 @@ requests
 mcp[cli]
 
 
-# ─── Testing ───
+# ─── Testing & Development (pip install -r requirements.txt) ───
 pytest
 httpx
+pytest-asyncio

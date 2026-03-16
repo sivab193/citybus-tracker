@@ -25,6 +25,7 @@ async def get_or_create_user(telegram_id: int, username: str = None) -> dict:
     new_user = {
         "_id": telegram_id,
         "username": username,
+        "registered_username": None,
         "created_at": datetime.now(timezone.utc),
         "favorites": [],
         "active_subscriptions": 0,
@@ -38,6 +39,25 @@ async def get_user(telegram_id: int) -> Optional[dict]:
     """Get a user by Telegram ID."""
     db = get_db()
     return await db.users.find_one({"_id": telegram_id})
+
+
+async def check_registered_username_exists(username: str) -> bool:
+    """Check if a registered_username is already taken (case-insensitive)."""
+    db = get_db()
+    # Case-insensitive check
+    doc = await db.users.find_one({"registered_username": {"$regex": f"^{username}$", "$options": "i"}})
+    return doc is not None
+
+
+async def set_registered_username(telegram_id: int, username: str) -> bool:
+    """Set the chosen unique registered_username for a user."""
+    db = get_db()
+    result = await db.users.update_one(
+        {"_id": telegram_id},
+        {"$set": {"registered_username": username}}
+    )
+    return result.modified_count > 0
+
 
 
 async def list_users(limit: int = 50, offset: int = 0) -> list[dict]:

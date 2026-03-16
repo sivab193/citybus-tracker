@@ -50,6 +50,7 @@ async def load_gtfs_to_mongo(zip_path: str, city_id: str = "default"):
                     stops.append(UpdateOne(
                         {"_id": row["stop_id"]},
                         {"$set": {
+                            "stop_id": row["stop_id"],
                             "stop_code": row.get("stop_code", ""),
                             "stop_name": row["stop_name"],
                             "stop_lat": float(row["stop_lat"]),
@@ -72,6 +73,7 @@ async def load_gtfs_to_mongo(zip_path: str, city_id: str = "default"):
                     routes.append(UpdateOne(
                         {"_id": row["route_id"]},
                         {"$set": {
+                            "route_id": row["route_id"],
                             "route_short_name": row.get("route_short_name", ""),
                             "route_long_name": row.get("route_long_name", ""),
                             "route_desc": row.get("route_desc"),

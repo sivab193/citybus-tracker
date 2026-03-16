@@ -1,0 +1,334 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg: #09090b;
+  --surface: rgba(24,24,27,0.9);
+  --border: rgba(255,255,255,0.06);
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.15);
+  --text: #fafafa;
+  --muted: #71717a;
+  --font: 'Inter', system-ui, sans-serif;
+}
+
+/* ── Light mode ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f4f5;
+    --surface: rgba(255,255,255,0.85);
+    --border: rgba(0,0,0,0.08);
+    --text: #18181b;
+    --muted: #71717a;
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+/* ── Layout Grid ── */
+.shell {
+  display: grid;
+  grid-template-rows: 56px 1fr auto;
+  height: 100vh;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  color: var(--green);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.logo svg {
+  width: 22px;
+  height: 22px;
+}
+
+nav { margin-left: auto; display: flex; gap: 24px; align-items: center; }
+
+nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: color .2s;
+}
+
+nav a:hover { color: var(--green); }
+
+/* ── Main Content ── */
+.content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 24px 0;
+  overflow: hidden;
+  align-content: start;
+}
+
+/* ── About Section (Left) ── */
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.about h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.15;
+}
+
+.about h1 span { color: var(--green); }
+
+.about p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+.about p a {
+  color: var(--green);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.about p a:hover { text-decoration: underline; }
+
+.tag-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--green-dim);
+  color: var(--green);
+  white-space: nowrap;
+}
+
+.tag.upcoming {
+  background: rgba(250,204,21,0.12);
+  color: #facc15;
+}
+
+.cta-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform .15s, box-shadow .2s;
+}
+
+.cta-primary {
+  background: var(--green);
+  color: #000;
+}
+
+.cta-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(52,211,153,.35);
+}
+
+.cta-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.cta-secondary:hover {
+  border-color: var(--green);
+}
+
+/* ── Right Column — Live Data ── */
+.live-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 16px;
+  overflow: hidden;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+
+.stat-card .num {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--green);
+  line-height: 1.2;
+}
+
+.stat-card .lbl {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Data Lists */
+.data-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.data-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+
+.data-card h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.data-card ol {
+  list-style: none;
+  counter-reset: rank;
+}
+
+.data-card ol li {
+  counter-increment: rank;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-card ol li:last-child { border-bottom: none; }
+
+.data-card ol li::before {
+  content: counter(rank);
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green-dim);
+  color: var(--green);
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.data-card .stop-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-card .badge {
+  font-size: 0.65rem;
+  color: var(--green);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.empty-msg {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+/* ── Footer ── */
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+
+footer span { color: var(--muted); }
+
+footer a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color .2s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+footer a:hover { color: var(--green); }
+
+footer svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .content { grid-template-columns: 1fr; overflow-y: auto; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .data-lists { grid-template-columns: 1fr; }
+  html, body { overflow: auto; }
+}

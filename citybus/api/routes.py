@@ -159,6 +159,77 @@ async def get_arrivals_endpoint(
         raise HTTPException(status_code=502, detail=f"Failed to fetch realtime data: {e}")
 
 
+# ── Metadata ──
+
+@router.get("/meta/dashboard-stats", tags=["Metadata"])
+async def dashboard_stats():
+    """Public stats for the dashboard UI — real aggregated data."""
+    db = get_db()
+    svc = get_stop_service()
+
+    total_users = await db.users.count_documents({})
+    active_subs = await db.subscriptions.count_documents({"status": "active"})
+    total_api_keys = await db.api_keys.count_documents({})
+
+    stats_doc = await db.stats.find_one({"_id": "global"})
+    total_requests = stats_doc.get("total_requests", 0) if stats_doc else 0
+
+    total_stops = len(svc.stops)
+    total_routes = len(svc.routes)
+
+    # Top favorited stops (aggregate across all users)
+    top_favorites = []
+    try:
+        pipeline = [
+            {"$unwind": "$favorites"},
+            {"$group": {"_id": "$favorites", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5},
+        ]
+        cursor = db.users.aggregate(pipeline)
+        fav_results = await cursor.to_list(length=5)
+        for item in fav_results:
+            stop = svc.get_stop(item["_id"])
+            top_favorites.append({
+                "stop_id": item["_id"],
+                "stop_name": stop.stop_name if stop else item["_id"],
+                "fav_count": item["count"],
+            })
+    except Exception:
+        pass
+
+    # Most tracked stops (from subscriptions)
+    top_tracked = []
+    try:
+        pipeline = [
+            {"$group": {"_id": "$stop_id", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5},
+        ]
+        cursor = db.subscriptions.aggregate(pipeline)
+        tracked_results = await cursor.to_list(length=5)
+        for item in tracked_results:
+            stop = svc.get_stop(item["_id"])
+            top_tracked.append({
+                "stop_id": item["_id"],
+                "stop_name": stop.stop_name if stop else item["_id"],
+                "track_count": item["count"],
+            })
+    except Exception:
+        pass
+
+    return {
+        "registered_users": total_users,
+        "total_stops": total_stops,
+        "total_routes": total_routes,
+        "api_requests_served": total_requests,
+        "active_subscriptions": active_subs,
+        "api_keys_issued": total_api_keys,
+        "top_favorites": top_favorites,
+        "top_tracked": top_tracked,
+    }
+
+
 # ── Health ──
 
 @router.get("/health", tags=["Health"])

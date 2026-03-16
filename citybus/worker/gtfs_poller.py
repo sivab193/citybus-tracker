@@ -48,8 +48,8 @@ class ServiceAlert:
 
 
 def fetch_trip_updates() -> gtfs_realtime_pb2.FeedMessage:
-    """Fetch trip updates protobuf from CityBus GTFS-RT."""
-    resp = requests.get(settings.GTFS_RT_TRIP_UPDATES_URL, timeout=10)
+    url = settings.get_config("GTFS_RT_TRIP_UPDATES_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_TripUpdates.pb")
+    resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(resp.content)
@@ -57,7 +57,8 @@ def fetch_trip_updates() -> gtfs_realtime_pb2.FeedMessage:
 
 
 def fetch_vehicle_positions() -> gtfs_realtime_pb2.FeedMessage:
-    resp = requests.get(settings.GTFS_RT_VEHICLE_POSITIONS_URL, timeout=10)
+    url = settings.get_config("GTFS_RT_VEHICLE_POSITIONS_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_VehiclePositions.pb")
+    resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(resp.content)
@@ -65,7 +66,8 @@ def fetch_vehicle_positions() -> gtfs_realtime_pb2.FeedMessage:
 
 
 def fetch_service_alerts() -> gtfs_realtime_pb2.FeedMessage:
-    resp = requests.get(settings.GTFS_RT_SERVICE_ALERTS_URL, timeout=10)
+    url = settings.get_config("GTFS_RT_SERVICE_ALERTS_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_ServiceAlerts.pb")
+    resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(resp.content)

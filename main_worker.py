@@ -28,17 +28,32 @@ async def worker_loop():
 
     # Init MongoDB indexes
     await init_db()
+    await settings.get_dynamic_config()
+    logger.info("Connected to MongoDB")
+
+    # ── Acquire Distributed Lock ──
+    from citybus.db.redis import acquire_service_lock, renew_service_lock
+    import sys
+    
+    if not await acquire_service_lock("worker", timeout=30):
+        print("❌ CRITICAL: Another citybus-worker instance is already running!")
+        logger.error("Failed to acquire Redis lock for 'worker'. Terminating.")
+        sys.exit(1)
+        
+    # Start heartbeat lock renewal in background
+    asyncio.create_task(renew_service_lock("worker", timeout=30))
+    logger.info("✅ Acquired Redis exclusive instance lock for Worker")
 
     # Pre-load GTFS
     svc = get_stop_service()
-    await svc.load_from_db()
+    await svc.load_from_db(city_id="lafayette")
     logger.info(f"Loaded {len(svc.stops)} stops and {len(svc.routes)} routes")
 
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
         logger.warning("TELEGRAM_BOT_TOKEN not set — notifications will be skipped")
 
-    interval = settings.WORKER_POLL_INTERVAL
+    interval = settings.get_config("WORKER_POLL_INTERVAL", 10)
     logger.info(f"Worker started — polling every {interval}s")
 
     while True:

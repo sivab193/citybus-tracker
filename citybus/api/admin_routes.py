@@ -19,7 +19,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 # ── Users ──
 
-@router.get("/users", dependencies=[Depends(require_admin_key)])
+@router.get("/users", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_list_users(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -30,7 +30,7 @@ async def admin_list_users(
     return {"data": users, "meta": {"total": total, "limit": limit, "offset": offset}}
 
 
-@router.get("/users/{user_id}", dependencies=[Depends(require_admin_key)])
+@router.get("/users/{user_id}", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_get_user(user_id: int):
     """Get details for a specific user."""
     user = await get_user(user_id)
@@ -43,7 +43,7 @@ async def admin_get_user(user_id: int):
     return {"user": user, "subscriptions": subs}
 
 
-@router.post("/users/{user_id}/ban", dependencies=[Depends(require_admin_key)])
+@router.post("/users/{user_id}/ban", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_ban_user(user_id: int):
     """Ban a user."""
     ok = await ban_user(user_id)
@@ -52,7 +52,7 @@ async def admin_ban_user(user_id: int):
     return {"message": f"User {user_id} banned"}
 
 
-@router.post("/users/{user_id}/unban", dependencies=[Depends(require_admin_key)])
+@router.post("/users/{user_id}/unban", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_unban_user(user_id: int):
     """Unban a user."""
     ok = await unban_user(user_id)
@@ -63,7 +63,7 @@ async def admin_unban_user(user_id: int):
 
 # ── Stats ──
 
-@router.get("/stats", dependencies=[Depends(require_admin_key)])
+@router.get("/stats", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_stats():
     """Get system-wide statistics."""
     db = get_db()
@@ -85,7 +85,7 @@ async def admin_stats():
 
 # ── Logs ──
 
-@router.get("/logs", dependencies=[Depends(require_admin_key)])
+@router.get("/logs", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_logs(
     limit: int = Query(50, ge=1, le=200),
     service: Optional[str] = Query(None),
@@ -103,7 +103,7 @@ async def admin_logs(
     return {"data": logs}
 
 
-@router.get("/errors", dependencies=[Depends(require_admin_key)])
+@router.get("/errors", dependencies=[Depends(require_admin_key)], tags=["Admin"])
 async def admin_errors(
     limit: int = Query(50, ge=1, le=200),
     service: Optional[str] = Query(None),
