@@ -23,7 +23,8 @@ def client():
 
 @pytest.fixture
 def admin_headers():
-    return {"X-Admin-Key": os.environ.get("ADMIN_API_KEY", "change_me_in_production")}
+    from citybus.config import settings
+    return {"X-Admin-Key": settings.get_config("ADMIN_API_KEY")}
 
 
 def _stop(sid="BUS215", name="CityBus Center"):
