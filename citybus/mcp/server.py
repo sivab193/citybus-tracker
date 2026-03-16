@@ -10,6 +10,7 @@ LM Studio config:
   Working directory: /path/to/citybus-bot
 """
 
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -115,7 +116,7 @@ async def get_arrivals(stop_id: str, route_id: Optional[str] = None) -> dict:
         return {"error": f"Stop '{stop_id}' not found"}
 
     try:
-        feed = fetch_trip_updates()
+        feed = await asyncio.to_thread(fetch_trip_updates)
         arrivals = parse_arrivals_for_stop(feed, stop_id, route_id)
         data = []
         for a in arrivals:

@@ -6,6 +6,7 @@ Includes user commands (/start, /search, /arrivals, /status, /stop,
 (/admin_stats, /admin_users, /admin_errors, /admin_broadcast, /debug).
 """
 
+import asyncio
 import re
 from datetime import datetime, timezone
 
@@ -296,7 +297,7 @@ async def _execute_arrivals(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     # Fallback: live fetch
     try:
-        feed = fetch_trip_updates()
+        feed = await asyncio.to_thread(fetch_trip_updates)
         arrivals = parse_arrivals_for_stop(feed, stop.stop_id)
         if not arrivals:
             await update.message.reply_text(f"📍 *{stop.stop_name}*\n\nNo upcoming arrivals.", parse_mode="Markdown")
