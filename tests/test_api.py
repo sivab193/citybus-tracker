@@ -45,14 +45,16 @@ class TestHealth:
         mock_svc.return_value = svc
         resp = client.get("/")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "healthy"
+        assert "text/html" in resp.headers["content-type"]
 
+    @patch("citybus.db.mongo.get_db")
     @patch("citybus.api.routes.get_stop_service")
-    def test_health_endpoint(self, mock_svc, client):
+    def test_health_endpoint(self, mock_svc, mock_db, client):
         svc = MagicMock()
         svc.stops = {"BUS215": _stop()}
         svc.routes = {"21": _route()}
         mock_svc.return_value = svc
+        mock_db.return_value = None
         resp = client.get("/api/v1/health")
         assert resp.status_code == 200
 
@@ -60,15 +62,19 @@ class TestHealth:
 # ── Auth ──
 
 class TestAuth:
-    def test_missing_api_key(self, client):
+    @patch("citybus.db.mongo.get_db")
+    def test_missing_api_key(self, mock_db, client):
+        mock_db.return_value = None
         resp = client.get("/api/v1/stops/BUS215")
         assert resp.status_code == 401
 
+    @patch("citybus.db.mongo.get_db")
     @patch("citybus.api.routes.get_db")
-    def test_signup(self, mock_db, client):
+    def test_signup(self, mock_routes_db, mock_mongo_db, client):
         db = MagicMock()
         db.api_keys.insert_one = AsyncMock()
-        mock_db.return_value = db
+        mock_routes_db.return_value = db
+        mock_mongo_db.return_value = None
         resp = client.post("/api/v1/auth/signup", json={"owner": "test@example.com"})
         assert resp.status_code == 200
         assert "api_key" in resp.json()
@@ -77,9 +83,11 @@ class TestAuth:
 # ── Stops (with auth mock) ──
 
 class TestStops:
+    @patch("citybus.db.mongo.get_db")
     @patch("citybus.api.auth.get_db")
     @patch("citybus.api.routes.get_stop_service")
-    def test_get_stop_found(self, mock_svc, mock_auth_db, client):
+    def test_get_stop_found(self, mock_svc, mock_auth_db, mock_mongo_db, client):
+        mock_mongo_db.return_value = None
         # Mock auth
         auth_db = MagicMock()
         auth_db.api_keys.find_one = AsyncMock(return_value={"_id": "cb_test", "is_active": True, "owner": "t"})
@@ -94,9 +102,11 @@ class TestStops:
         resp = client.get("/api/v1/stops/BUS215", headers={"X-API-Key": "cb_test"})
         assert resp.status_code == 200
 
+    @patch("citybus.db.mongo.get_db")
     @patch("citybus.api.auth.get_db")
     @patch("citybus.api.routes.get_stop_service")
-    def test_get_stop_not_found(self, mock_svc, mock_auth_db, client):
+    def test_get_stop_not_found(self, mock_svc, mock_auth_db, mock_mongo_db, client):
+        mock_mongo_db.return_value = None
         auth_db = MagicMock()
         auth_db.api_keys.find_one = AsyncMock(return_value={"_id": "cb_test", "is_active": True, "owner": "t"})
         auth_db.api_keys.update_one = AsyncMock()
