@@ -6,6 +6,7 @@ import time
 import traceback
 from contextlib import asynccontextmanager
 
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -13,6 +14,10 @@ from fastapi.staticfiles import StaticFiles
 
 from citybus.db.mongo import init_db
 from citybus.logging.logger import log_error
+
+# Global set to hold strong references to background tasks
+# to prevent garbage collection mid-execution.
+_background_tasks = set()
 from citybus.api.routes import router as public_router
 from citybus.api.admin_routes import router as admin_router
 
@@ -60,18 +65,31 @@ def create_api() -> FastAPI:
         from citybus.db.mongo import get_db
         path = request.url.path
         
+        response = await call_next(request)
+
         # Only count functional API requests
         # Filter: starts with /api/ AND is NOT the dashboard stats endpoint
         if path.startswith("/api/") and not path.endswith("/meta/dashboard-stats"):
-            db = get_db()
-            if db is not None:
-                 await db.stats.update_one(
-                     {"_id": "global"},
-                     {"$inc": {"total_requests": 1}},
-                     upsert=True
-                 )
-        
-        return await call_next(request)
+            async def update_stats():
+                db = get_db()
+                if db is not None:
+                    try:
+                        await db.stats.update_one(
+                            {"_id": "global"},
+                            {"$inc": {"total_requests": 1}},
+                            upsert=True
+                        )
+                    except Exception:
+                        pass
+
+            # Using asyncio.create_task to run the DB update concurrently.
+            # We retain a strong reference to avoid the task being garbage
+            # collected mid-execution by the event loop.
+            task = asyncio.create_task(update_stats())
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+
+        return response
 
     # Error-logging middleware
     @app.middleware("http")
