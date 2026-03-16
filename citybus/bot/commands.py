@@ -6,6 +6,7 @@ Includes user commands (/start, /search, /arrivals, /status, /stop,
 (/admin_stats, /admin_users, /admin_errors, /admin_broadcast, /debug).
 """
 
+import asyncio
 import re
 from datetime import datetime, timezone
 
@@ -621,10 +622,12 @@ async def admin_stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_admin(update.effective_user.id):
         return
     db = get_db()
-    users = await db.users.count_documents({})
-    active = await db.subscriptions.count_documents({"status": "active"})
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    errors = await db.logs_errors.count_documents({"timestamp": {"$gte": today}})
+    users, active, errors = await asyncio.gather(
+        db.users.count_documents({}),
+        db.subscriptions.count_documents({"status": "active"}),
+        db.logs_errors.count_documents({"timestamp": {"$gte": today}})
+    )
     await update.message.reply_text(
         f"📊 *Admin Stats*\n\n"
         f"Users: {users}\n"
