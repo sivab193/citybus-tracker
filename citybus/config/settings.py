@@ -11,10 +11,6 @@ load_dotenv()
 # --- Telegram Bot ---
 TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 
-# --- Location & Agency ---
-CITY_ID: str = os.environ.get("CITY_ID", "default")
-AGENCY_TZ: str = os.environ.get("AGENCY_TZ", "UTC")
-
 # --- API ---
 API_PORT: int = int(os.environ.get("API_PORT", "8000"))
 
@@ -30,6 +26,8 @@ REDIS_ARRIVAL_TTL: int = int(os.environ.get("REDIS_ARRIVAL_TTL", "30"))
 # These are the DEFAULT values. The actual values will be fetched
 # dynamically from the `config` collection in MongoDB.
 DEFAULT_CONFIG = {
+    "CITY_ID": os.environ.get("CITY_ID", "default"),
+    "AGENCY_TZ": os.environ.get("AGENCY_TZ", "UTC"),
     "GTFS_RT_TRIP_UPDATES_URL": os.environ.get("GTFS_RT_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_TripUpdates.pb"),
     "GTFS_RT_VEHICLE_POSITIONS_URL": os.environ.get("GTFS_RT_VEHICLE_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_VehiclePositions.pb"),
     "GTFS_RT_SERVICE_ALERTS_URL": os.environ.get("GTFS_RT_ALERTS_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_ServiceAlerts.pb"),

@@ -16,9 +16,6 @@ from citybus.config import settings
 from citybus.db.mongo import get_db
 from citybus.db.models import Stop, Route
 
-# Use configured timezone
-AGENCY_TZ = ZoneInfo(settings.AGENCY_TZ)
-
 
 class StopService:
     """Provides stop, route, and schedule queries from GTFS static data."""
@@ -140,6 +137,8 @@ class StopService:
         if stop_id not in self.stop_times:
             return []
         arrivals = []
+        tz_name = settings.get_config("AGENCY_TZ", "UTC")
+        agency_tz = ZoneInfo(tz_name)
         for secs, tid in self.stop_times[stop_id]:
             if secs < current_seconds:
                 continue
@@ -152,7 +151,7 @@ class StopService:
             if not svc or svc.get(day_of_week) != 1:
                 continue
             if "start_date" in svc and "end_date" in svc:
-                today = datetime.now(AGENCY_TZ).strftime("%Y%m%d")
+                today = datetime.now(agency_tz).strftime("%Y%m%d")
                 if not (svc["start_date"] <= today <= svc["end_date"]):
                     continue
             arrivals.append({

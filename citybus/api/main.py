@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     from citybus.config import settings
     from citybus.services.stop_service import get_stop_service
     svc = get_stop_service()
-    await svc.load_from_db(city_id=settings.CITY_ID)
+    await svc.load_from_db(city_id=settings.get_config("CITY_ID", "default"))
     
     yield
 
