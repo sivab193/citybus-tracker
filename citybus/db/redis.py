@@ -70,6 +70,7 @@ async def set_vehicle(vehicle_id: str, data: dict, ttl: int = 30):
 async def get_vehicle(vehicle_id: str) -> Optional[dict]:
     """Get cached vehicle position."""
     r = get_redis()
+    raw = await r.get(f"vehicle:{vehicle_id}")
     if raw:
         return json.loads(raw)
     return None

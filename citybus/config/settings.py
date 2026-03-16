@@ -11,6 +11,10 @@ load_dotenv()
 # --- Telegram Bot ---
 TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 
+# --- Location & Agency ---
+CITY_ID: str = os.environ.get("CITY_ID", "default")
+AGENCY_TZ: str = os.environ.get("AGENCY_TZ", "UTC")
+
 # --- API ---
 API_PORT: int = int(os.environ.get("API_PORT", "8000"))
 

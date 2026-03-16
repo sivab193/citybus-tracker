@@ -10,13 +10,14 @@ from typing import Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-# CityBus of Greater Lafayette, Indiana
-AGENCY_TZ = ZoneInfo("America/Indiana/Indianapolis")
-
 from rapidfuzz import fuzz, process
 
+from citybus.config import settings
 from citybus.db.mongo import get_db
 from citybus.db.models import Stop, Route
+
+# Use configured timezone
+AGENCY_TZ = ZoneInfo(settings.AGENCY_TZ)
 
 
 class StopService:

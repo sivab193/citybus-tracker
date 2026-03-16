@@ -22,9 +22,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     
     # Load GTFS static data into memory for the API
+    from citybus.config import settings
     from citybus.services.stop_service import get_stop_service
     svc = get_stop_service()
-    await svc.load_from_db(city_id="lafayette")
+    await svc.load_from_db(city_id=settings.CITY_ID)
     
     yield
 
