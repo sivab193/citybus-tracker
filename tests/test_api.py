@@ -40,10 +40,7 @@ def _route(rid="21", short="21", long="Purdue West"):
 class TestHealth:
     @patch("citybus.services.stop_service.get_stop_service")
     def test_root(self, mock_svc, client):
-        svc = MagicMock()
-        svc.stops = {"BUS215": _stop()}
-        svc.routes = {"21": _route()}
-        mock_svc.return_value = svc
+        # The root endpoint serves index.html dashboard, not JSON status
         resp = client.get("/")
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
