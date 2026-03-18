@@ -736,7 +736,7 @@ async def get_next_bus_info(stop_id: str) -> tuple[str, bool]:
 
     # 3. No bus in 2 hours - Find the absolute next bus
     # Check remaining of today
-    scheduled_today = svc.get_scheduled_arrivals(stop_id, day_name, current_secs)
+    scheduled_today = svc.get_scheduled_arrivals(stop_id, day_name, current_secs, limit=1)
     if scheduled_today:
         first = scheduled_today[0]
         t = first["time_seconds"]

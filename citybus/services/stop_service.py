@@ -133,7 +133,7 @@ class StopService:
         # Filter for decent matches (score > 50) and map back using the key
         return [self.stops[r[2]] for r in results if r[1] > 50 and r[2] in self.stops]
 
-    def get_scheduled_arrivals(self, stop_id: str, day_of_week: str, current_seconds: int, duration_seconds: int = None) -> list[dict]:
+    def get_scheduled_arrivals(self, stop_id: str, day_of_week: str, current_seconds: int, duration_seconds: int = None, limit: int = None) -> list[dict]:
         if stop_id not in self.stop_times:
             return []
         arrivals = []
@@ -159,6 +159,8 @@ class StopService:
                 "route_id": trip["route_id"],
                 "headsign": trip["headsign"],
             })
+            if limit and len(arrivals) >= limit:
+                break
         return arrivals
 
     def nearby_stops(self, lat: float, lon: float, radius_km: float = 0.5, limit: int = 10) -> list[dict]:
