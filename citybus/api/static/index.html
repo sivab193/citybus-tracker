@@ -39,7 +39,14 @@
         <span class="tag">Telegram</span>
         <span class="tag">REST API</span>
         <span class="tag">MCP Server</span>
-        <span class="tag upcoming">🎮 Discord — Soon</span>
+      </div>
+
+      <div class="integrations-row">
+        <strong>Upcoming Integrations:</strong>
+        <button class="integration-btn" onclick="voteIntegration('discord')">🎮 Discord — Soon <span id="clicks-discord" class="click-badge">0</span></button>
+        <button class="integration-btn" onclick="voteIntegration('slack')">#️⃣ Slack — Soon <span id="clicks-slack" class="click-badge">0</span></button>
+        <button class="integration-btn" onclick="voteIntegration('whatsapp')">💬 WhatsApp — Soon <span id="clicks-whatsapp" class="click-badge">0</span></button>
+        <button class="integration-btn" onclick="voteIntegration('imessage')">💬 iMessage — Soon <span id="clicks-imessage" class="click-badge">0</span></button>
       </div>
 
       <p>
@@ -67,11 +74,40 @@
       </div>
     </div>
 
+      <!-- Waitlist -->
+      <div class="waitlist-card data-card">
+        <h3>🚀 Join the Waitlist</h3>
+        <p class="waitlist-desc">Every week I will try to onboard one new city from all the existing places I have visited or based on user requests. This will keep happening only until the database or scaling limits of the free tier cloud are reached, and provided the GTFS feed is public and open source to use.</p>
+        <div class="waitlist-grid" id="waitlist-container">
+          <button class="waitlist-btn" onclick="voteWaitlist('mta')">MTA (New York) <span id="wl-mta" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('mbta')">MBTA (Boston) <span id="wl-mbta" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('cta')">CTA (Chicago) <span id="wl-cta" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('la_metro')">LA Metro <span id="wl-la_metro" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('wmata')">WMATA (DC) <span id="wl-wmata" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('septa')">SEPTA (Philadelphia) <span id="wl-septa" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('trimet')">TriMet (Portland) <span id="wl-trimet" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('kc_metro')">King County Metro <span id="wl-kc_metro" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('denver_rtd')">Denver RTD <span id="wl-denver_rtd" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('sd_mts')">San Diego MTS <span id="wl-sd_mts" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('minn_metro')">Minneapolis Metro <span id="wl-minn_metro" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('sound_transit')">Sound Transit <span id="wl-sound_transit" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('capmetro')">CapMetro (Austin) <span id="wl-capmetro" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('indygo')">IndyGo (Indianapolis) <span id="wl-indygo" class="wl-badge">0</span></button>
+          <button class="waitlist-btn" onclick="voteWaitlist('cota')">COTA (Columbus) <span id="wl-cota" class="wl-badge">0</span></button>
+        </div>
+      </div>
+
+    </div>
+
     <!-- Right: Live Panel -->
     <div class="live-panel">
 
       <!-- Stats Grid -->
       <div class="stats-grid" aria-live="polite">
+        <div class="stat-card">
+          <span class="num" id="s-cities">—</span>
+          <span class="lbl">Cities</span>
+        </div>
         <div class="stat-card">
           <span class="num" id="s-users">—</span>
           <span class="lbl">Bot Users</span>
@@ -110,11 +146,19 @@
         </div>
       </div>
 
+      <!-- Supported Cities -->
+      <div class="data-card supported-cities-card">
+        <h3>🏙️ Supported Cities</h3>
+        <ul id="city-list" aria-live="polite"><li class="empty-msg">Loading…</li></ul>
+      </div>
+
     </div>
   </div>
 
   <!-- Footer (matching zeroHour style) -->
   <footer>
+    <span class="site-hits">👀 Site Hits: <strong id="site-hits-counter">0</strong></span>
+    <span>•</span>
     <span>Built with precision and robust timezone support</span>
     <a href="https://siv19.dev/" target="_blank" rel="noopener noreferrer">siv19.dev</a>
     <a href="https://github.com/sivab193" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
@@ -145,10 +189,46 @@
     ).join('');
   }
 
+  function renderCities(items) {
+    const ul = document.getElementById('city-list');
+    if (!items || items.length === 0) {
+      ul.innerHTML = '<li class="empty-msg">No cities loaded.</li>';
+      return;
+    }
+    ul.innerHTML = items.map(i =>
+      `<li><span class="city-name">${i.name}</span><span class="stat-badge">${fmt(i.objects_count)} objs</span><span class="stat-badge">${i.approx_size}</span></li>`
+    ).join('');
+  }
+
+  async function voteIntegration(name) {
+    try {
+      const r = await fetch(`/api/v1/meta/clicks/${name}`, { method: 'POST' });
+      const d = await r.json();
+      document.getElementById(`clicks-${name}`).textContent = d.clicks;
+    } catch (e) { console.error('Vote failed:', e); }
+  }
+
+  async function voteWaitlist(city_code) {
+    try {
+      const r = await fetch(`/api/v1/meta/waitlist/${city_code}`, { method: 'POST' });
+      const d = await r.json();
+      document.getElementById(`wl-${city_code}`).textContent = d.votes;
+    } catch (e) { console.error('Vote failed:', e); }
+  }
+
+  async function registerHit() {
+    try {
+      const r = await fetch('/api/v1/meta/hit', { method: 'POST' });
+      const d = await r.json();
+      document.getElementById('site-hits-counter').textContent = fmt(d.site_hits);
+    } catch (e) { console.error('Hit track failed:', e); }
+  }
+
   async function load() {
     try {
       const r = await fetch('/api/v1/meta/dashboard-stats');
       const d = await r.json();
+      document.getElementById('s-cities').textContent = fmt(d.total_cities);
       document.getElementById('s-users').textContent = fmt(d.registered_users);
       document.getElementById('s-stops').textContent = fmt(d.total_stops);
       document.getElementById('s-routes').textContent = fmt(d.total_routes);
@@ -157,9 +237,25 @@
       document.getElementById('s-reqs').textContent  = fmt(d.api_requests_served);
       renderList('fav-list', d.top_favorites, 'stop_name', 'fav_count', '♥');
       renderList('track-list', d.top_tracked, 'stop_name', 'track_count', '×');
+      if (d.supported_cities) {
+        renderCities(d.supported_cities);
+      }
+      if (d.integration_clicks) {
+        document.getElementById('clicks-discord').textContent = d.integration_clicks.discord || 0;
+        document.getElementById('clicks-slack').textContent = d.integration_clicks.slack || 0;
+        document.getElementById('clicks-whatsapp').textContent = d.integration_clicks.whatsapp || 0;
+        document.getElementById('clicks-imessage').textContent = d.integration_clicks.imessage || 0;
+      }
+      if (d.waitlist) {
+        Object.keys(d.waitlist).forEach(city => {
+          const el = document.getElementById(`wl-${city}`);
+          if (el) el.textContent = d.waitlist[city];
+        });
+      }
     } catch (e) { console.error('Stats fetch failed:', e); }
   }
 
+  registerHit();
   load();
   setInterval(load, 15000);
 </script>

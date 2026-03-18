@@ -162,6 +162,58 @@ async def get_arrivals_endpoint(
 
 # ── Metadata ──
 
+@router.post("/meta/waitlist/{city_code}", tags=["Metadata"])
+async def waitlist_vote(city_code: str):
+    """Track waitlist votes."""
+    valid_cities = {
+        "mta", "mbta", "cta", "la_metro", "wmata", "septa", "trimet",
+        "kc_metro", "denver_rtd", "sd_mts", "minn_metro", "sound_transit",
+        "capmetro", "indygo", "cota"
+    }
+    if city_code not in valid_cities:
+        raise HTTPException(status_code=400, detail="Invalid city code")
+
+    db = get_db()
+    await db.stats.update_one(
+        {"_id": "waitlist_votes"},
+        {"$inc": {city_code: 1}},
+        upsert=True
+    )
+    doc = await db.stats.find_one({"_id": "waitlist_votes"})
+    return {"city_code": city_code, "votes": doc.get(city_code, 0)}
+
+@router.post("/meta/hit", tags=["Metadata"])
+async def track_site_hit():
+    """Track a site hit for the homepage."""
+    db = get_db()
+    await db.stats.update_one(
+        {"_id": "site_hits"},
+        {"$inc": {"hits": 1}},
+        upsert=True
+    )
+    doc = await db.stats.find_one({"_id": "site_hits"})
+    return {"site_hits": doc.get("hits", 0)}
+
+@router.post("/meta/clicks/{integration}", tags=["Metadata"])
+async def track_integration_click(integration: str):
+    """Track clicks on upcoming integrations."""
+    valid_integrations = {"discord", "slack", "whatsapp", "imessage"}
+    if integration not in valid_integrations:
+        raise HTTPException(status_code=400, detail="Invalid integration")
+
+    db = get_db()
+    # Use update_one to increment the click count
+    await db.stats.update_one(
+        {"_id": "integration_clicks"},
+        {"$inc": {integration: 1}},
+        upsert=True
+    )
+
+    # Return updated count
+    doc = await db.stats.find_one({"_id": "integration_clicks"})
+    return {"integration": integration, "clicks": doc.get(integration, 0)}
+
+
 @router.get("/meta/dashboard-stats", tags=["Metadata"])
 async def dashboard_stats():
     """Public stats for the dashboard UI — real aggregated data."""
@@ -175,8 +227,35 @@ async def dashboard_stats():
     stats_doc = await db.stats.find_one({"_id": "global"})
     total_requests = stats_doc.get("total_requests", 0) if stats_doc else 0
 
-    total_stops = len(svc.stops)
-    total_routes = len(svc.routes)
+    total_stops = await db.stops.count_documents({})
+    total_routes = await db.routes.count_documents({})
+    distinct_cities = await db.stops.distinct("city_id")
+    total_cities = len(distinct_cities) if distinct_cities else 0
+
+    # Supported cities details
+    supported_cities = []
+    if distinct_cities:
+        for cid in distinct_cities:
+            city_stops = await db.stops.count_documents({"city_id": cid})
+            city_routes = await db.routes.count_documents({"city_id": cid})
+            city_trips = await db.trips.count_documents({"city_id": cid})
+            city_stop_times = await db.stop_times.count_documents({"city_id": cid})
+            total_objs = city_stops + city_routes + city_trips + city_stop_times
+
+            # Approximate size:
+            # 1 stop ~ 500B, 1 route ~ 500B, 1 trip ~ 300B, 1 stop_time ~ 150B
+            size_bytes = (city_stops * 500) + (city_routes * 500) + (city_trips * 300) + (city_stop_times * 150)
+            size_mb = size_bytes / (1024 * 1024)
+            size_str = f"{size_mb:.1f} MB" if size_mb >= 0.1 else "<0.1 MB"
+
+            name = "Greater Lafayette, IN" if cid == "default" else cid.title()
+
+            supported_cities.append({
+                "city_id": cid,
+                "name": name,
+                "objects_count": total_objs,
+                "approx_size": size_str
+            })
 
     # Top favorited stops (aggregate across all users)
     top_favorites = []
@@ -198,6 +277,22 @@ async def dashboard_stats():
             })
     except Exception:
         pass
+
+    # Waitlist votes
+    waitlist_doc = await db.stats.find_one({"_id": "waitlist_votes"}) or {}
+    waitlist = {
+        k: waitlist_doc.get(k, 0)
+        for k in ["mta", "mbta", "cta", "la_metro", "wmata", "septa", "trimet", "kc_metro", "denver_rtd", "sd_mts", "minn_metro", "sound_transit", "capmetro", "indygo", "cota"]
+    }
+
+    # Integration clicks
+    clicks_doc = await db.stats.find_one({"_id": "integration_clicks"}) or {}
+    clicks = {
+        "discord": clicks_doc.get("discord", 0),
+        "slack": clicks_doc.get("slack", 0),
+        "whatsapp": clicks_doc.get("whatsapp", 0),
+        "imessage": clicks_doc.get("imessage", 0),
+    }
 
     # Most tracked stops (from subscriptions)
     top_tracked = []
@@ -221,6 +316,7 @@ async def dashboard_stats():
 
     return {
         "registered_users": total_users,
+        "total_cities": total_cities,
         "total_stops": total_stops,
         "total_routes": total_routes,
         "api_requests_served": total_requests,
@@ -228,6 +324,9 @@ async def dashboard_stats():
         "api_keys_issued": total_api_keys,
         "top_favorites": top_favorites,
         "top_tracked": top_tracked,
+        "supported_cities": supported_cities,
+        "integration_clicks": clicks,
+        "waitlist": waitlist,
     }
 
 
