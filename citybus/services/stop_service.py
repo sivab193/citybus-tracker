@@ -10,11 +10,9 @@ from typing import Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-# CityBus of Greater Lafayette, Indiana
-AGENCY_TZ = ZoneInfo("America/Indiana/Indianapolis")
-
 from rapidfuzz import fuzz, process
 
+from citybus.config import settings
 from citybus.db.mongo import get_db
 from citybus.db.models import Stop, Route
 
@@ -139,6 +137,8 @@ class StopService:
         if stop_id not in self.stop_times:
             return []
         arrivals = []
+        tz_name = settings.get_config("AGENCY_TZ", "UTC")
+        agency_tz = ZoneInfo(tz_name)
         for secs, tid in self.stop_times[stop_id]:
             if secs < current_seconds:
                 continue
@@ -151,7 +151,7 @@ class StopService:
             if not svc or svc.get(day_of_week) != 1:
                 continue
             if "start_date" in svc and "end_date" in svc:
-                today = datetime.now(AGENCY_TZ).strftime("%Y%m%d")
+                today = datetime.now(agency_tz).strftime("%Y%m%d")
                 if not (svc["start_date"] <= today <= svc["end_date"]):
                     continue
             arrivals.append({

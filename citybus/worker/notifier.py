@@ -63,12 +63,13 @@ async def process_notifications(bot_token: str):
             lines = [f"🚏 *{stop_name}*\n"]
             route_key = f"route_{route_id}" if route_id != "ALL" else None
 
-            if route_key and route_key in cached:
-                secs = cached[route_key]
-                route = svc.get_route(route_id)
-                r_name = route.route_short_name if route else route_id
-                mins = secs // 60
-                lines.append(f"🚌 Route {r_name}: {mins} min{'s' if mins != 1 else ''}")
+            if route_key:
+                if route_key in cached:
+                    secs = cached[route_key]
+                    route = svc.get_route(route_id)
+                    r_name = route.route_short_name if route else route_id
+                    mins = secs // 60
+                    lines.append(f"🚌 Route {r_name}: {mins} min{'s' if mins != 1 else ''}")
             else:
                 # Show all routes
                 for key, secs in sorted(cached.items(), key=lambda x: x[1]):

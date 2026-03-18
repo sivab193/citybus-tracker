@@ -94,7 +94,7 @@ async def get_route(route_id: str, _=Depends(require_api_key)):
     route = svc.get_route(route_id)
     if not route:
         raise HTTPException(status_code=404, detail=f"Route '{route_id}' not found")
-    stop_ids = svc.route_stops.get(route_id, set())
+    stop_ids = svc.route_stops.get(route.route_id, set())
     stops = [svc.get_stop(sid).model_dump() for sid in stop_ids if svc.get_stop(sid)]
     return {"data": route.model_dump(), "stops": stops}
 
