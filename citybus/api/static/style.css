@@ -149,6 +149,47 @@ nav a:hover { color: var(--green); }
   color: #facc15;
 }
 
+.integrations-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.integrations-row strong {
+  color: var(--muted);
+}
+
+.integration-btn {
+  background: rgba(250,204,21,0.12);
+  color: #facc15;
+  border: 1px solid rgba(250,204,21,0.3);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.integration-btn:hover {
+  background: rgba(250,204,21,0.25);
+}
+
+.click-badge {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.6rem;
+}
+
 .cta-row {
   display: flex;
   gap: 12px;
@@ -185,6 +226,58 @@ nav a:hover { color: var(--green); }
 
 .cta-secondary:hover {
   border-color: var(--green);
+}
+
+/* ── Waitlist ── */
+.waitlist-card {
+  margin-top: 16px;
+}
+
+.waitlist-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.waitlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.waitlist-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.waitlist-btn:hover {
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+
+.wl-badge {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  color: var(--green);
+}
+
+@media (prefers-color-scheme: light) {
+  .wl-badge {
+    background: rgba(0,0,0,0.05);
+  }
 }
 
 /* ── Right Column — Live Data ── */
@@ -244,6 +337,10 @@ nav a:hover { color: var(--green); }
   overflow: hidden;
 }
 
+.supported-cities-card {
+  margin-top: -4px;
+}
+
 .data-card h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -252,13 +349,14 @@ nav a:hover { color: var(--green); }
   margin-bottom: 10px;
 }
 
-.data-card ol {
+.data-card ol,
+.data-card ul {
   list-style: none;
   counter-reset: rank;
 }
 
-.data-card ol li {
-  counter-increment: rank;
+.data-card ol li,
+.data-card ul li {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -267,7 +365,12 @@ nav a:hover { color: var(--green); }
   border-bottom: 1px solid var(--border);
 }
 
-.data-card ol li:last-child { border-bottom: none; }
+.data-card ol li {
+  counter-increment: rank;
+}
+
+.data-card ol li:last-child,
+.data-card ul li:last-child { border-bottom: none; }
 
 .data-card ol li::before {
   content: counter(rank);
@@ -283,7 +386,8 @@ nav a:hover { color: var(--green); }
   font-weight: 700;
 }
 
-.data-card .stop-name {
+.data-card .stop-name,
+.data-card .city-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -294,6 +398,16 @@ nav a:hover { color: var(--green); }
   font-size: 0.65rem;
   color: var(--green);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.data-card .stat-badge {
+  font-size: 0.65rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: 4px;
   white-space: nowrap;
 }
 
