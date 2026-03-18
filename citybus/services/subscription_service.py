@@ -8,8 +8,11 @@ Enforces limits from the spec:
 """
 
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+from pymongo import UpdateOne
 
 from citybus.config import settings
 from citybus.db.mongo import get_db
@@ -160,7 +163,25 @@ async def cleanup_inactive():
         }
     ).to_list(length=1000)
 
-    for sub in inactive:
-        await stop_subscription(sub["_id"])
+    if not inactive:
+        return 0
+
+    sub_ids = [sub["_id"] for sub in inactive]
+    user_ids = [sub["user_id"] for sub in inactive]
+
+    # Bulk update subscriptions to stopped
+    await db.subscriptions.update_many(
+        {"_id": {"$in": sub_ids}},
+        {"$set": {"status": "stopped"}},
+    )
+
+    # Bulk update users to decrement active_subscriptions
+    user_counts = Counter(user_ids)
+    user_updates = [
+        UpdateOne({"_id": uid}, {"$inc": {"active_subscriptions": -count}})
+        for uid, count in user_counts.items()
+    ]
+    if user_updates:
+        await db.users.bulk_write(user_updates)
 
     return len(inactive)
