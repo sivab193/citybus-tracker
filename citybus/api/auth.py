@@ -39,8 +39,8 @@ async def require_api_key(api_key: str = Security(api_key_header)) -> dict:
 
 async def require_admin_key(admin_key: str = Security(admin_key_header)):
     """Validate admin key from X-Admin-Key header."""
-    admin_config_key = settings.get_config("ADMIN_API_KEY", "change_me_in_production")
-    if not admin_key or admin_key != admin_config_key:
+    admin_config_key = settings.get_config("ADMIN_API_KEY")
+    if not admin_key or not admin_config_key or admin_key != admin_config_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
     return True
 

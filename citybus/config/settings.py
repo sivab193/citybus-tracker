@@ -3,6 +3,7 @@ Centralized settings — all configuration from .env with validated defaults.
 """
 
 import os
+import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,7 +33,7 @@ DEFAULT_CONFIG = {
     "GTFS_RT_VEHICLE_POSITIONS_URL": os.environ.get("GTFS_RT_VEHICLE_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_VehiclePositions.pb"),
     "GTFS_RT_SERVICE_ALERTS_URL": os.environ.get("GTFS_RT_ALERTS_URL", "https://bus.gocitybus.com/GTFSRT/GTFS_ServiceAlerts.pb"),
     "API_RATE_LIMIT": os.environ.get("API_RATE_LIMIT", "100/minute"),
-    "ADMIN_API_KEY": os.environ.get("ADMIN_API_KEY", "change_me_in_production"),
+    "ADMIN_API_KEY": os.environ.get("ADMIN_API_KEY", secrets.token_urlsafe(32)),
     "ADMIN_IDS": [int(x.strip()) for x in os.environ.get("ADMIN_IDS", "").split(",") if x.strip()],
     "WORKER_POLL_INTERVAL": int(os.environ.get("WORKER_POLL_INTERVAL", "10")),
     "MAX_ACTIVE_SUBSCRIPTIONS": 3,
