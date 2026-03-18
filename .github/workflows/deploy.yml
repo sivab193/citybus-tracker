@@ -15,10 +15,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
         run: |
           SHOULD_DEPLOY="false"
 
-          if echo "$COMMIT_MSG" | grep -q "/prod"; then
+          if [ "$ACTOR" = "${{ github.repository_owner }}" ] && echo "$COMMIT_MSG" | grep -q "/prod"; then
             SHOULD_DEPLOY="true"
           else
             PRS_JSON=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls 2>/dev/null || echo "[]")
@@ -56,7 +57,7 @@ jobs:
           script: |
             cd ~/citybus-tracker
             git pull origin main
-            docker compose down
-            docker compose up -d --build
+            docker-compose down
+            docker-compose up -d --build
             docker image prune -f
             echo "✅ Deploy complete at $(date)"
