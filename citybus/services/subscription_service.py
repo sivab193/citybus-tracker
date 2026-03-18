@@ -23,6 +23,8 @@ async def create_subscription(
     stop_id: str,
     route_id: str,
     frequency: int,
+    platform: str = "telegram",
+    chat_id: int = None,
 ) -> dict:
     """Create a new subscription.
 
@@ -60,6 +62,8 @@ async def create_subscription(
         "stop_id": stop_id,
         "route_id": route_id,
         "frequency": frequency,
+        "platform": platform,
+        "chat_id": chat_id or user_id,
         "created_at": datetime.now(timezone.utc),
         "last_sent": None,
         "status": "active",

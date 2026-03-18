@@ -49,9 +49,11 @@ async def worker_loop():
     await svc.load_from_db(city_id="lafayette")
     logger.info(f"Loaded {len(svc.stops)} stops and {len(svc.routes)} routes")
 
-    token = settings.TELEGRAM_BOT_TOKEN
-    if not token:
-        logger.warning("TELEGRAM_BOT_TOKEN not set — notifications will be skipped")
+    telegram_token = settings.TELEGRAM_BOT_TOKEN
+    discord_token = settings.DISCORD_BOT_TOKEN
+
+    if not telegram_token and not discord_token:
+        logger.warning("Bot tokens not set — notifications will be skipped")
 
     interval = settings.get_config("WORKER_POLL_INTERVAL", 10)
     logger.info(f"Worker started — polling every {interval}s")
@@ -66,8 +68,8 @@ async def worker_loop():
 
             # 3. Process notifications
             sent = 0
-            if token:
-                sent = await process_notifications(token)
+            if telegram_token or discord_token:
+                sent = await process_notifications(telegram_token, discord_token)
 
             if sent > 0:
                 logger.info(f"Sent {sent} notifications")

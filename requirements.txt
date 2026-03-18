@@ -29,3 +29,5 @@ mcp[cli]
 pytest
 httpx
 pytest-asyncio
+discord.py>=2.3.0
+aiohttp

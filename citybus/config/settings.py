@@ -12,6 +12,9 @@ load_dotenv()
 # --- Telegram Bot ---
 TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 
+# --- Discord Bot ---
+DISCORD_BOT_TOKEN: str = os.environ.get("DISCORD_BOT_TOKEN", "")
+
 # --- API ---
 API_PORT: int = int(os.environ.get("API_PORT", "8000"))
 
