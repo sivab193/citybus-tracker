@@ -17,12 +17,11 @@ from citybus.logging.logger import get_logger, log_error
 logger = get_logger()
 
 
-async def process_notifications(bot_token: str):
+async def process_notifications(bot_token: str, discord_token: str = None):
     """Check all active subscriptions and send updates where due.
 
-    This is called by the worker loop. It uses the Telegram Bot API
-    directly (HTTP) rather than python-telegram-bot to avoid coupling
-    the worker to the bot's event loop.
+    This is called by the worker loop. It uses the Telegram or Discord HTTP API
+    directly to avoid coupling the worker to the bot's event loop.
     """
     subs = await get_all_active_subscriptions()
     if not subs:
@@ -88,19 +87,43 @@ async def process_notifications(bot_token: str):
 
             text = "\n".join(lines)
 
-            # Send via Telegram HTTP API
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            resp = requests.post(url, json={
-                "chat_id": sub["user_id"],
-                "text": text,
-                "parse_mode": "Markdown",
-            }, timeout=10)
+            platform = sub.get("platform", "telegram")
 
-            if resp.status_code == 200:
-                await record_notification(sub["_id"])
-                sent += 1
-            else:
-                logger.warning(f"Telegram send failed for sub {sub['_id']}: {resp.status_code}")
+            if platform == "telegram":
+                if not bot_token:
+                    continue
+                # Send via Telegram HTTP API
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                resp = requests.post(url, json={
+                    "chat_id": sub.get("chat_id", sub["user_id"]),
+                    "text": text,
+                    "parse_mode": "Markdown",
+                }, timeout=10)
+
+                if resp.status_code == 200:
+                    await record_notification(sub["_id"])
+                    sent += 1
+                else:
+                    logger.warning(f"Telegram send failed for sub {sub['_id']}: {resp.status_code}")
+
+            elif platform == "discord":
+                if not discord_token:
+                    continue
+                # Send via Discord HTTP API
+                chat_id = sub.get("chat_id")
+                if not chat_id:
+                    continue
+                url = f"https://discord.com/api/v10/channels/{chat_id}/messages"
+                headers = {"Authorization": f"Bot {discord_token}"}
+                resp = requests.post(url, json={
+                    "content": text
+                }, headers=headers, timeout=10)
+
+                if resp.status_code == 200:
+                    await record_notification(sub["_id"])
+                    sent += 1
+                else:
+                    logger.warning(f"Discord send failed for sub {sub['_id']}: {resp.status_code} - {resp.text}")
 
         except Exception as e:
             await log_error(

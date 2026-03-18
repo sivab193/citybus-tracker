@@ -8,24 +8,33 @@ from typing import Optional
 from citybus.db.mongo import get_db
 
 
-async def get_or_create_user(telegram_id: int, username: str = None) -> dict:
-    """Get a user by Telegram ID, creating them if they don't exist."""
+async def get_or_create_user(user_id: int, username: str = None, platform: str = "telegram") -> dict:
+    """Get a user by ID, creating them if they don't exist."""
     db = get_db()
-    doc = await db.users.find_one({"_id": telegram_id})
+    # Find existing user, using their platform-specific ID.
+    doc = await db.users.find_one({"_id": user_id})
     if doc:
-        # Update username if changed
+        # Update username or platform if changed/missing
+        updates = {}
         if username and doc.get("username") != username:
-            await db.users.update_one(
-                {"_id": telegram_id},
-                {"$set": {"username": username}},
-            )
+            updates["username"] = username
             doc["username"] = username
+        if platform and doc.get("platform") != platform:
+            updates["platform"] = platform
+            doc["platform"] = platform
+
+        if updates:
+            await db.users.update_one(
+                {"_id": user_id},
+                {"$set": updates},
+            )
         return doc
 
     new_user = {
-        "_id": telegram_id,
+        "_id": user_id,
         "username": username,
         "registered_username": None,
+        "platform": platform,
         "created_at": datetime.now(timezone.utc),
         "favorites": [],
         "active_subscriptions": 0,
