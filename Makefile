@@ -27,27 +27,27 @@ clear-test-db:
 
 load-gtfs:
 	@if [ -z "$(ZIP)" ]; then echo "Error: ZIP is required. Usage: make load-gtfs ZIP=path/to/gtfs.zip"; exit 1; fi
-	docker-compose run --rm api python citybus/scripts/load_gtfs.py $(ZIP) $(CITY)
+	docker compose run --rm api python citybus/scripts/load_gtfs.py $(ZIP) $(CITY)
 
 run-api:
-	docker-compose up -d api
+	docker compose up -d api
 
 run-bot:
-	docker-compose up -d bot
+	docker compose up -d bot
 
 run-worker:
-	docker-compose up -d worker
+	docker compose up -d worker
 
 run-all:
-	docker-compose up -d
+	docker compose up -d
 
 stop-all:
-	docker-compose down
+	docker compose down
 
 test-docker:
 	@echo "Running all tests in isolated Docker containers..."
-	docker-compose -f docker-compose.test.yml up --build --exit-code-from tests
-	docker-compose -f docker-compose.test.yml down
+	docker compose -f docker-compose.test.yml up --build --exit-code-from tests
+	docker compose -f docker-compose.test.yml down
 
 test:
 	@echo "Running unit tests locally..."
