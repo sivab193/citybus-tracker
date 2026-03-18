@@ -2,6 +2,7 @@
 Public API routes — stops, routes, arrivals, search, auth.
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -137,7 +138,7 @@ async def get_arrivals_endpoint(
 
     # Fallback: live fetch
     try:
-        feed = fetch_trip_updates()
+        feed = await asyncio.to_thread(fetch_trip_updates)
         arrivals = parse_arrivals_for_stop(feed, stop_id, route_id)
         data = []
         for a in arrivals:
